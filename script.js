@@ -226,10 +226,75 @@ async function handleFileUpload(event) {
                 const problemTopics = problem.Topics.split(',').map(topic => topic.trim().replace(/"/g, ''));
                 problemTopics.forEach(topic => topics.add(topic));
             }
+            
+            // Store companies and time periods as arrays for each problem
+            if (!Array.isArray(problem.Companies)) {
+                problem.Companies = [problem.Company];
+            } else if (!problem.Companies.includes(problem.Company)) {
+                problem.Companies.push(problem.Company);
+            }
+            
+            if (!Array.isArray(problem.TimePeriods)) {
+                problem.TimePeriods = [problem.TimePeriod];
+            } else if (!problem.TimePeriods.includes(problem.TimePeriod)) {
+                problem.TimePeriods.push(problem.TimePeriod);
+            }
         });
         
-        // Add to all problems
-        allProblems = allProblems.concat(problems);
+        // Check for duplicates and merge them instead of adding new entries
+        problems.forEach(problem => {
+            // Use Link or Title as unique identifier
+            const uniqueId = problem.Link || problem.Title;
+            if (!uniqueId) return; // Skip if no unique identifier
+            
+            // Check if this problem already exists
+            const existingIndex = allProblems.findIndex(p => 
+                (p.Link && p.Link === problem.Link) || 
+                (p.Title && p.Title === problem.Title)
+            );
+            
+            if (existingIndex >= 0) {
+                // Merge with existing problem
+                const existingProblem = allProblems[existingIndex];
+                
+                // Add company if not already in the list
+                if (!existingProblem.Companies.includes(problem.Company)) {
+                    existingProblem.Companies.push(problem.Company);
+                }
+                
+                // Add time period if not already in the list
+                if (!existingProblem.TimePeriods.includes(problem.TimePeriod)) {
+                    existingProblem.TimePeriods.push(problem.TimePeriod);
+                }
+                
+                // Update frequency if the new one is higher
+                if (parseFloat(problem.Frequency) > parseFloat(existingProblem.Frequency || 0)) {
+                    existingProblem.Frequency = problem.Frequency;
+                }
+                
+                // Merge topics if new ones are present
+                if (problem.Topics && existingProblem.Topics) {
+                    const existingTopics = new Set(existingProblem.Topics.split(',').map(t => t.trim()));
+                    const newTopics = problem.Topics.split(',').map(t => t.trim());
+                    
+                    newTopics.forEach(topic => existingTopics.add(topic));
+                    existingProblem.Topics = Array.from(existingTopics).join(', ');
+                } else if (problem.Topics) {
+                    existingProblem.Topics = problem.Topics;
+                }
+                
+                // Use the highest acceptance rate
+                const existingRate = parseFloat(existingProblem["Acceptance Rate"] || existingProblem.Acceptance_Rate || 0);
+                const newRate = parseFloat(problem["Acceptance Rate"] || problem.Acceptance_Rate || 0);
+                if (newRate > existingRate) {
+                    existingProblem["Acceptance Rate"] = problem["Acceptance Rate"];
+                    existingProblem.Acceptance_Rate = problem.Acceptance_Rate;
+                }
+            } else {
+                // Add new problem to the list
+                allProblems.push(problem);
+            }
+        });
     }
     
     // Check if we found any valid data
@@ -323,12 +388,12 @@ function sortProblems(problems, sortColumn, sortDirection) {
         
         switch(sortColumn) {
             case 'company':
-                aValue = a.Company || '';
-                bValue = b.Company || '';
+                aValue = (Array.isArray(a.Companies) ? a.Companies[0] : a.Company) || '';
+                bValue = (Array.isArray(b.Companies) ? b.Companies[0] : b.Company) || '';
                 break;
             case 'timePeriod':
-                aValue = a.TimePeriod || '';
-                bValue = b.TimePeriod || '';
+                aValue = (Array.isArray(a.TimePeriods) ? a.TimePeriods[0] : a.TimePeriod) || '';
+                bValue = (Array.isArray(b.TimePeriods) ? b.TimePeriods[0] : b.TimePeriod) || '';
                 break;
             case 'difficulty':
                 // Custom sort order for difficulty: HARD > MEDIUM > EASY
@@ -400,13 +465,25 @@ function filterProblems() {
         
         const filteredProblems = allProblems.filter(problem => {
             // Check company filter
-            if (companyFilter && problem.Company !== companyFilter) return false;
+            if (companyFilter) {
+                if (Array.isArray(problem.Companies)) {
+                    if (!problem.Companies.includes(companyFilter)) return false;
+                } else if (problem.Company !== companyFilter) {
+                    return false;
+                }
+            }
             
             // Check difficulty filter
             if (difficultyFilter && problem.Difficulty !== difficultyFilter) return false;
             
             // Check time period filter
-            if (timePeriodFilter && problem.TimePeriod !== timePeriodFilter) return false;
+            if (timePeriodFilter) {
+                if (Array.isArray(problem.TimePeriods)) {
+                    if (!problem.TimePeriods.includes(timePeriodFilter)) return false;
+                } else if (problem.TimePeriod !== timePeriodFilter) {
+                    return false;
+                }
+            }
             
             // Check topic filter
             if (topicFilter && (!problem.Topics || !problem.Topics.includes(topicFilter))) return false;
@@ -432,11 +509,28 @@ function filterProblems() {
             // Check search query
             if (searchQuery) {
                 const title = problem.Title?.toLowerCase() || '';
-                const company = problem.Company?.toLowerCase() || '';
+                
+                // Handle company search in either Company string or Companies array
+                let companyMatch = false;
+                if (Array.isArray(problem.Companies)) {
+                    companyMatch = problem.Companies.some(c => c.toLowerCase().includes(searchQuery));
+                } else {
+                    companyMatch = (problem.Company?.toLowerCase() || '').includes(searchQuery);
+                }
+                
+                // Handle time period search
+                let timeMatch = false;
+                if (Array.isArray(problem.TimePeriods)) {
+                    timeMatch = problem.TimePeriods.some(t => t.toLowerCase().includes(searchQuery));
+                } else {
+                    timeMatch = (problem.TimePeriod?.toLowerCase() || '').includes(searchQuery);
+                }
+                
                 const topics = problem.Topics?.toLowerCase() || '';
                 
                 if (!title.includes(searchQuery) && 
-                    !company.includes(searchQuery) && 
+                    !companyMatch && 
+                    !timeMatch &&
                     !topics.includes(searchQuery)) {
                     return false;
                 }
@@ -481,14 +575,24 @@ function displayProblems(problems) {
         doneCell.appendChild(doneCheckbox);
         row.appendChild(doneCell);
         
-        // Company
+        // Company - show all companies that have this problem
         const companyCell = document.createElement('td');
-        companyCell.textContent = problem.Company;
+        if (Array.isArray(problem.Companies)) {
+            const companies = [...new Set(problem.Companies)]; // Remove duplicates
+            companyCell.textContent = companies.join(', ');
+        } else {
+            companyCell.textContent = problem.Company || '';
+        }
         row.appendChild(companyCell);
         
-        // Time Period
+        // Time Period - show all time periods for this problem
         const timePeriodCell = document.createElement('td');
-        timePeriodCell.textContent = problem.TimePeriod;
+        if (Array.isArray(problem.TimePeriods)) {
+            const timePeriods = [...new Set(problem.TimePeriods)]; // Remove duplicates
+            timePeriodCell.textContent = timePeriods.join(', ');
+        } else {
+            timePeriodCell.textContent = problem.TimePeriod || '';
+        }
         row.appendChild(timePeriodCell);
         
         // Difficulty
@@ -588,6 +692,11 @@ function exportToCSV(problems) {
     problems.forEach(problem => {
         const row = orderedHeaders.map(header => {
             let value = problem[header] || '';
+            
+            // Handle arrays (Companies, TimePeriods)
+            if (Array.isArray(value)) {
+                value = value.join(', ');
+            }
             
             // Escape quotes and wrap in quotes if needed
             if (value.includes(',') || value.includes('"') || value.includes('\n')) {
@@ -716,13 +825,25 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const filteredProblems = allProblems.filter(problem => {
             // Check company filter
-            if (companyFilter && problem.Company !== companyFilter) return false;
+            if (companyFilter) {
+                if (Array.isArray(problem.Companies)) {
+                    if (!problem.Companies.includes(companyFilter)) return false;
+                } else if (problem.Company !== companyFilter) {
+                    return false;
+                }
+            }
             
             // Check difficulty filter
             if (difficultyFilter && problem.Difficulty !== difficultyFilter) return false;
             
             // Check time period filter
-            if (timePeriodFilter && problem.TimePeriod !== timePeriodFilter) return false;
+            if (timePeriodFilter) {
+                if (Array.isArray(problem.TimePeriods)) {
+                    if (!problem.TimePeriods.includes(timePeriodFilter)) return false;
+                } else if (problem.TimePeriod !== timePeriodFilter) {
+                    return false;
+                }
+            }
             
             // Check topic filter
             if (topicFilter && (!problem.Topics || !problem.Topics.includes(topicFilter))) return false;
@@ -747,11 +868,28 @@ document.addEventListener('DOMContentLoaded', () => {
             // Check search query
             if (searchQuery) {
                 const title = problem.Title?.toLowerCase() || '';
-                const company = problem.Company?.toLowerCase() || '';
+                
+                // Handle company search in either Company string or Companies array
+                let companyMatch = false;
+                if (Array.isArray(problem.Companies)) {
+                    companyMatch = problem.Companies.some(c => c.toLowerCase().includes(searchQuery));
+                } else {
+                    companyMatch = (problem.Company?.toLowerCase() || '').includes(searchQuery);
+                }
+                
+                // Handle time period search
+                let timeMatch = false;
+                if (Array.isArray(problem.TimePeriods)) {
+                    timeMatch = problem.TimePeriods.some(t => t.toLowerCase().includes(searchQuery));
+                } else {
+                    timeMatch = (problem.TimePeriod?.toLowerCase() || '').includes(searchQuery);
+                }
+                
                 const topics = problem.Topics?.toLowerCase() || '';
                 
                 if (!title.includes(searchQuery) && 
-                    !company.includes(searchQuery) && 
+                    !companyMatch && 
+                    !timeMatch &&
                     !topics.includes(searchQuery)) {
                     return false;
                 }
@@ -760,12 +898,25 @@ document.addEventListener('DOMContentLoaded', () => {
             return true;
         });
         
-        // Add completed status to the problems
+        // Add completed status to the problems and format arrays for CSV
         const problemsWithStatus = filteredProblems.map(problem => {
-            return {
-                ...problem,
-                Completed: completedProblems.has(problem.Link) ? 'Yes' : 'No'
-            };
+            // Create copy to avoid modifying original
+            const formattedProblem = { ...problem };
+            
+            // Add completed status
+            formattedProblem.Completed = completedProblems.has(problem.Link) ? 'Yes' : 'No';
+            
+            // Format Company information
+            if (Array.isArray(formattedProblem.Companies)) {
+                formattedProblem.Company = formattedProblem.Companies.join(', ');
+            }
+            
+            // Format TimePeriod information
+            if (Array.isArray(formattedProblem.TimePeriods)) {
+                formattedProblem.TimePeriod = formattedProblem.TimePeriods.join(', ');
+            }
+            
+            return formattedProblem;
         });
         
         // Export filtered problems
