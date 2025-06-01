@@ -14,18 +14,6 @@
     <div class="upload-section">
         <h2>Upload Data</h2>
         <p>Upload your LeetCode problems folder to populate the data. Select the root folder containing company subfolders.</p>
-        <div class="folder-structure">
-            <p><strong>Expected Folder Structure:</strong></p>
-            <pre>
-root-folder/
-  ├── Company1/
-  │   ├── TimeFrame1.csv
-  │   └── TimeFrame2.csv
-  └── Company2/
-      ├── TimeFrame1.csv
-      └── TimeFrame2.csv
-            </pre>
-        </div>
         <div class="upload-area">
             <input type="file" id="folder-upload" webkitdirectory directory multiple />
             <label for="folder-upload" class="file-label">Choose Folder</label>
@@ -33,6 +21,10 @@ root-folder/
             <button id="upload-btn">Load Data</button>
         </div>
         <div id="upload-status"></div>
+        <div class="storage-management">
+            <div id="storage-status"></div>
+            <button id="clear-data">Clear Saved Data</button>
+        </div>
     </div>
     
     <div class="filters">

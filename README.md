@@ -48,4 +48,17 @@ Each CSV file should contain columns like:
 
 ## Data Persistence
 
-Your completed problems are saved in your browser's local storage, so they will persist between sessions on the same browser.
+The application automatically stores your data in your browser's local storage, enabling:
+
+- **Complete Data Persistence**: All problem data is saved automatically when you upload files.
+- **Completed Problem Tracking**: Your progress on completed problems is preserved.
+- **Quick Loading**: Data loads automatically when you revisit the site, no need to re-upload files.
+- **Storage Management**: View your current storage usage and clear saved data if needed.
+
+### Storage Limitations
+
+Browser local storage is limited (typically 5-10MB). If you upload a very large dataset:
+
+- The application will automatically prioritize higher frequency problems if space is limited
+- You can always clear the saved data and start fresh
+- Your completed problem markers will be saved separately from the main dataset

@@ -19,6 +19,140 @@ function saveCompletedProblems() {
     localStorage.setItem('completedLeetCodeProblems', JSON.stringify([...completedProblems]));
 }
 
+// Helper function to check storage quota and availability
+function checkStorageQuota() {
+    // For browsers that support the Storage API
+    if (navigator.storage && navigator.storage.estimate) {
+        return navigator.storage.estimate().then(estimate => {
+            const percentUsed = (estimate.usage / estimate.quota) * 100;
+            const remaining = estimate.quota - estimate.usage;
+            return {
+                quota: estimate.quota,
+                usage: estimate.usage,
+                percentUsed: percentUsed,
+                remaining: remaining
+            };
+        });
+    } else {
+        // Fallback for browsers without Storage API
+        // Estimate based on localStorage size
+        let totalSize = 0;
+        for (const key in localStorage) {
+            if (localStorage.hasOwnProperty(key)) {
+                totalSize += (localStorage[key].length + key.length) * 2; // UTF-16 uses 2 bytes per char
+            }
+        }
+        
+        // Rough estimate - most browsers have around 5-10MB limit
+        const estimatedQuota = 5 * 1024 * 1024; // 5MB
+        const percentUsed = (totalSize / estimatedQuota) * 100;
+        
+        return Promise.resolve({
+            quota: estimatedQuota, 
+            usage: totalSize,
+            percentUsed: percentUsed,
+            remaining: estimatedQuota - totalSize
+        });
+    }
+}
+
+// Save all problem data to localStorage with compression if needed
+function saveAllData() {
+    try {
+        // First attempt - save without compression
+        localStorage.setItem('leetCodeProblems', JSON.stringify(allProblems));
+        localStorage.setItem('leetCodeCompanies', JSON.stringify([...companies]));
+        localStorage.setItem('leetCodeTopics', JSON.stringify([...topics]));
+        localStorage.setItem('leetCodeTimePeriods', JSON.stringify([...timePeriods]));
+        localStorage.setItem('leetCodeLastSaved', new Date().toISOString());
+        
+        console.log(`Saved ${allProblems.length} problems to localStorage`);
+        return true;
+    } catch (error) {
+        // If storage quota exceeded, try with fewer problems
+        console.warn('Storage quota exceeded, trying with fewer problems');
+        
+        if (allProblems.length > 500) {
+            try {
+                // Try saving just 500 problems with highest frequency
+                const sortedProblems = [...allProblems].sort((a, b) => {
+                    const freqA = parseFloat(a.Frequency) || 0;
+                    const freqB = parseFloat(b.Frequency) || 0;
+                    return freqB - freqA; // Descending order
+                });
+                
+                const reducedProblems = sortedProblems.slice(0, 500);
+                localStorage.setItem('leetCodeProblems', JSON.stringify(reducedProblems));
+                localStorage.setItem('leetCodeCompanies', JSON.stringify([...companies]));
+                localStorage.setItem('leetCodeTopics', JSON.stringify([...topics]));
+                localStorage.setItem('leetCodeTimePeriods', JSON.stringify([...timePeriods]));
+                localStorage.setItem('leetCodeLastSaved', new Date().toISOString());
+                localStorage.setItem('leetCodeDataTruncated', 'true');
+                
+                console.warn(`Saved ${reducedProblems.length} out of ${allProblems.length} problems (data truncated)`);
+                return true;
+            } catch (error) {
+                console.error('Failed to save reduced data set:', error);
+                return false;
+            }
+        }
+        
+        console.error('Failed to save data to localStorage:', error);
+        return false;
+    }
+}
+
+// Load all problem data from localStorage
+function loadAllData() {
+    try {
+        const savedProblems = localStorage.getItem('leetCodeProblems');
+        const savedCompanies = localStorage.getItem('leetCodeCompanies');
+        const savedTopics = localStorage.getItem('leetCodeTopics');
+        const savedTimePeriods = localStorage.getItem('leetCodeTimePeriods');
+        const lastSaved = localStorage.getItem('leetCodeLastSaved');
+        const dataTruncated = localStorage.getItem('leetCodeDataTruncated') === 'true';
+        
+        if (savedProblems && savedCompanies && savedTopics && savedTimePeriods) {
+            // Restore problems array
+            allProblems = JSON.parse(savedProblems);
+            
+            // Restore sets
+            companies = new Set(JSON.parse(savedCompanies));
+            topics = new Set(JSON.parse(savedTopics));
+            timePeriods = new Set(JSON.parse(savedTimePeriods));
+            
+            console.log(`Loaded ${allProblems.length} problems from localStorage`);
+            
+            // Show warning if data was truncated
+            if (dataTruncated) {
+                console.warn('Note: Only a subset of problems was saved due to storage limitations');
+                updateUploadStatus('Note: Only high-frequency problems are saved due to storage limitations', true);
+            }
+            
+            // Show when data was last saved
+            if (lastSaved) {
+                const savedDate = new Date(lastSaved);
+                const now = new Date();
+                const timeDiff = Math.round((now - savedDate) / (1000 * 60)); // minutes
+                
+                if (timeDiff < 60) {
+                    console.log(`Data was saved ${timeDiff} minutes ago`);
+                } else if (timeDiff < 24 * 60) {
+                    console.log(`Data was saved ${Math.round(timeDiff / 60)} hours ago`);
+                } else {
+                    console.log(`Data was saved ${Math.round(timeDiff / (60 * 24))} days ago`);
+                }
+            }
+            
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Failed to load data from localStorage:', error);
+        return false;
+    }
+}
+
 // Parse CSV content
 function parseCSV(csv) {
     const lines = csv.split('\n');
@@ -309,6 +443,13 @@ async function handleFileUpload(event) {
         updateUploadStatus('Note: Using simplified folder structure. For best results, use: /root/companyname/timeperiod.csv', true);
     }
     
+    // Save all data to localStorage
+    const saveResult = saveAllData();
+    if (!saveResult) {
+        console.warn('Warning: Failed to save data to localStorage. Data will not persist after page refresh.');
+        updateUploadStatus('Warning: Data too large to save in browser storage. Data will not persist after page refresh.', true);
+    }
+    
     // Update filter options
     updateFilterOptions();
     
@@ -324,6 +465,103 @@ function readFile(file) {
         reader.onerror = error => reject(error);
         reader.readAsText(file);
     });
+}
+
+// Save all problem data to localStorage
+function saveAllData() {
+    try {
+        // First attempt - save without compression
+        localStorage.setItem('leetCodeProblems', JSON.stringify(allProblems));
+        localStorage.setItem('leetCodeCompanies', JSON.stringify([...companies]));
+        localStorage.setItem('leetCodeTopics', JSON.stringify([...topics]));
+        localStorage.setItem('leetCodeTimePeriods', JSON.stringify([...timePeriods]));
+        localStorage.setItem('leetCodeLastSaved', new Date().toISOString());
+        
+        console.log(`Saved ${allProblems.length} problems to localStorage`);
+        return true;
+    } catch (error) {
+        // If storage quota exceeded, try with fewer problems
+        console.warn('Storage quota exceeded, trying with fewer problems');
+        
+        if (allProblems.length > 500) {
+            try {
+                // Try saving just 500 problems with highest frequency
+                const sortedProblems = [...allProblems].sort((a, b) => {
+                    const freqA = parseFloat(a.Frequency) || 0;
+                    const freqB = parseFloat(b.Frequency) || 0;
+                    return freqB - freqA; // Descending order
+                });
+                
+                const reducedProblems = sortedProblems.slice(0, 500);
+                localStorage.setItem('leetCodeProblems', JSON.stringify(reducedProblems));
+                localStorage.setItem('leetCodeCompanies', JSON.stringify([...companies]));
+                localStorage.setItem('leetCodeTopics', JSON.stringify([...topics]));
+                localStorage.setItem('leetCodeTimePeriods', JSON.stringify([...timePeriods]));
+                localStorage.setItem('leetCodeLastSaved', new Date().toISOString());
+                localStorage.setItem('leetCodeDataTruncated', 'true');
+                
+                console.warn(`Saved ${reducedProblems.length} out of ${allProblems.length} problems (data truncated)`);
+                return true;
+            } catch (error) {
+                console.error('Failed to save reduced data set:', error);
+                return false;
+            }
+        }
+        
+        console.error('Failed to save data to localStorage:', error);
+        return false;
+    }
+}
+
+// Load all problem data from localStorage
+function loadAllData() {
+    try {
+        const savedProblems = localStorage.getItem('leetCodeProblems');
+        const savedCompanies = localStorage.getItem('leetCodeCompanies');
+        const savedTopics = localStorage.getItem('leetCodeTopics');
+        const savedTimePeriods = localStorage.getItem('leetCodeTimePeriods');
+        const lastSaved = localStorage.getItem('leetCodeLastSaved');
+        const dataTruncated = localStorage.getItem('leetCodeDataTruncated') === 'true';
+        
+        if (savedProblems && savedCompanies && savedTopics && savedTimePeriods) {
+            // Restore problems array
+            allProblems = JSON.parse(savedProblems);
+            
+            // Restore sets
+            companies = new Set(JSON.parse(savedCompanies));
+            topics = new Set(JSON.parse(savedTopics));
+            timePeriods = new Set(JSON.parse(savedTimePeriods));
+            
+            console.log(`Loaded ${allProblems.length} problems from localStorage`);
+            
+            // Show warning if data was truncated
+            if (dataTruncated) {
+                console.warn('Note: Only a subset of problems was saved due to storage limitations');
+                updateUploadStatus('Note: Only high-frequency problems are saved due to storage limitations', true);
+            }
+            
+            // Show when data was last saved
+            if (lastSaved) {
+                const savedDate = new Date(lastSaved);
+                const now = new Date();
+                const timeDiff = Math.round((now - savedDate) / (1000 * 60)); // minutes
+                
+                if (timeDiff < 60) {
+                    console.log(`Data was saved ${timeDiff} minutes ago`);
+                } else if (timeDiff < 24 * 60) {
+                    console.log(`Data was saved ${Math.round(timeDiff / 60)} hours ago`);
+                } else {
+                    console.log(`Data was saved ${Math.round(timeDiff / (60 * 24))} days ago`);
+                }
+            }
+            
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Failed to load data from localStorage:', error);
+        return false;
+    }
 }
 
 // Update filter dropdown options
@@ -570,6 +808,10 @@ function displayProblems(problems) {
                 completedProblems.delete(problem.Link);
             }
             saveCompletedProblems();
+            
+            // No need to save all data since only completed status changed
+            // and that's already being saved by saveCompletedProblems()
+            
             updateProblemCount(problems);
         });
         doneCell.appendChild(doneCheckbox);
@@ -729,6 +971,128 @@ function updateUploadStatus(message, isError = false) {
     status.className = isError ? 'status-error' : 'status-success';
 }
 
+// Update storage status display
+function updateStorageStatus() {
+    const statusElement = document.getElementById('storage-status');
+    if (!statusElement) return;
+    
+    // Check if we have saved data
+    const hasProblems = localStorage.getItem('leetCodeProblems') !== null;
+    const hasCompletedProblems = localStorage.getItem('completedLeetCodeProblems') !== null;
+    const dataTruncated = localStorage.getItem('leetCodeDataTruncated') === 'true';
+    const lastSaved = localStorage.getItem('leetCodeLastSaved');
+    
+    // Get approximate storage size
+    let totalSize = 0;
+    for (const key in localStorage) {
+        if (localStorage.hasOwnProperty(key) && key.startsWith('leetCode')) {
+            totalSize += localStorage.getItem(key).length;
+        }
+    }
+    
+    // Convert to KB or MB
+    let sizeText = '';
+    if (totalSize > 1024 * 1024) {
+        sizeText = `${(totalSize / (1024 * 1024)).toFixed(2)} MB`;
+    } else if (totalSize > 0) {
+        sizeText = `${(totalSize / 1024).toFixed(2)} KB`;
+    }
+    
+    // Last saved date
+    let lastSavedText = '';
+    if (lastSaved) {
+        const savedDate = new Date(lastSaved);
+        const now = new Date();
+        const timeDiff = Math.round((now - savedDate) / (1000 * 60)); // minutes
+        
+        if (timeDiff < 1) {
+            lastSavedText = 'just now';
+        } else if (timeDiff < 60) {
+            lastSavedText = `${timeDiff} minute${timeDiff !== 1 ? 's' : ''} ago`;
+        } else if (timeDiff < 24 * 60) {
+            const hours = Math.floor(timeDiff / 60);
+            lastSavedText = `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+        } else {
+            const days = Math.floor(timeDiff / (60 * 24));
+            lastSavedText = `${days} day${days !== 1 ? 's' : ''} ago`;
+        }
+    }
+    
+    // Update the status text based on what we have
+    if (hasProblems) {
+        const problemsCount = JSON.parse(localStorage.getItem('leetCodeProblems')).length;
+        let statusText = `${problemsCount} problems stored (${sizeText})`;
+        
+        if (lastSavedText) {
+            statusText += ` · Last saved: ${lastSavedText}`;
+        }
+        
+        if (dataTruncated) {
+            statusText += ' · Note: Data was truncated due to storage limits';
+            statusElement.className = 'status-warning';
+        } else {
+            statusElement.className = 'status-success';
+        }
+        
+        statusElement.textContent = statusText;
+    } else if (hasCompletedProblems) {
+        statusElement.textContent = `Only completed problem status is stored (${sizeText})`;
+        statusElement.className = 'status-warning';
+    } else {
+        statusElement.textContent = 'No data stored in browser';
+        statusElement.className = 'status-neutral';
+    }
+    
+    // Check storage quota if browser supports it
+    checkStorageQuota().then(quotaInfo => {
+        if (quotaInfo.percentUsed > 80) {
+            // Add warning if close to quota
+            const warning = document.createElement('div');
+            warning.className = 'storage-warning';
+            warning.textContent = `⚠️ Browser storage is ${Math.round(quotaInfo.percentUsed)}% full. You may need to clear some data.`;
+            statusElement.appendChild(warning);
+        }
+    }).catch(err => {
+        console.log('Could not check storage quota', err);
+    });
+}
+
+// Clear all saved data
+function clearSavedData() {
+    // Only clear leetcode related items
+    for (const key in localStorage) {
+        if (localStorage.hasOwnProperty(key) && key.startsWith('leetCode')) {
+            localStorage.removeItem(key);
+        }
+    }
+    
+    // Reset global variables if we're not reloading the page
+    allProblems = [];
+    companies.clear();
+    topics.clear();
+    timePeriods.clear();
+    completedProblems.clear();
+    
+    // Update UI
+    updateStorageStatus();
+    
+    // Clear the table
+    document.getElementById('problems-body').innerHTML = '';
+    document.getElementById('problem-count').textContent = '0 problems found';
+    document.getElementById('completed-count').textContent = '0 completed (0%)';
+    
+    // Clear filters
+    document.getElementById('company-filter').innerHTML = '<option value="">All Companies</option>';
+    document.getElementById('time-period-filter').innerHTML = '<option value="">All Time Periods</option>';
+    document.getElementById('topic-filter').innerHTML = '<option value="">All Topics</option>';
+    
+    // Show no data message
+    document.getElementById('no-data-message').style.display = 'block';
+    document.getElementById('problems-table').classList.remove('visible');
+    
+    return true;
+}
+
 // Update selected folder display
 function updateSelectedFolder(files) {
     const selectedFolder = document.getElementById('selected-folder');
@@ -747,6 +1111,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load completed problems
     loadCompletedProblems();
     
+    // Update storage status display
+    updateStorageStatus();
+    
+    // Try to load saved data from localStorage
+    if (loadAllData()) {
+        // If data loaded successfully, update UI
+        updateFilterOptions();
+        filterProblems();
+        updateUploadStatus('Loaded saved data from previous session');
+        
+        // Update count of loaded companies in status
+        if (companies.size > 0) {
+            updateUploadStatus(`Loaded ${allProblems.length} problems from ${companies.size} companies.`);
+        }
+    }
+    
+    // Set up Clear Data button
+    const clearDataBtn = document.getElementById('clear-data');
+    if (clearDataBtn) {
+        clearDataBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to clear all saved data? This cannot be undone.')) {
+                if (clearSavedData()) {
+                    updateUploadStatus('All saved data has been cleared');
+                }
+            }
+        });
+    }
+    
     // Set up file input change event
     const fileInput = document.getElementById('folder-upload');
     fileInput.addEventListener('change', () => {
@@ -760,6 +1152,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateUploadStatus('Loading data...');
             await handleFileUpload(event);
             updateUploadStatus(`Successfully loaded ${allProblems.length} problems from ${companies.size} companies.`);
+            updateStorageStatus();
         } catch (error) {
             updateUploadStatus(`Error loading data: ${error.message}`, true);
             console.error(error);
@@ -922,4 +1315,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Export filtered problems
         exportToCSV(problemsWithStatus);
     });
+});
+
+// Add event listener for page unload to ensure data is saved
+window.addEventListener('beforeunload', () => {
+    // Save completed problems
+    saveCompletedProblems();
+    
+    // No need to save all problems as they are already saved when uploaded/modified
+    // and this could cause performance issues during page unload
+    
+    return undefined; // Allow normal page unload
 });
