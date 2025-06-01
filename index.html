@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode Problem Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>LeetCode Problem Tracker</h1>
+    </header>
+    
+    <div class="upload-section">
+        <h2>Upload Data</h2>
+        <p>Upload your LeetCode problems folder to populate the data. Select the root folder containing company subfolders.</p>
+        <div class="folder-structure">
+            <p><strong>Expected Folder Structure:</strong></p>
+            <pre>
+root-folder/
+  ├── Company1/
+  │   ├── TimeFrame1.csv
+  │   └── TimeFrame2.csv
+  └── Company2/
+      ├── TimeFrame1.csv
+      └── TimeFrame2.csv
+            </pre>
+        </div>
+        <div class="upload-area">
+            <input type="file" id="folder-upload" webkitdirectory directory multiple />
+            <label for="folder-upload" class="file-label">Choose Folder</label>
+            <span id="selected-folder">No folder selected</span>
+            <button id="upload-btn">Load Data</button>
+        </div>
+        <div id="upload-status"></div>
+    </div>
+    
+    <div class="filters">
+        <h2>Filters</h2>
+        <div class="search-box">
+            <label for="search-input">Search:</label>
+            <input type="text" id="search-input" placeholder="Search problems by title, company, topics...">
+        </div>
+        
+        <div class="filter-row">
+            <div class="filter-group">
+                <label for="company-filter">Company:</label>
+                <select id="company-filter">
+                    <option value="">All Companies</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="difficulty-filter">Difficulty:</label>
+                <select id="difficulty-filter">
+                    <option value="">All Difficulties</option>
+                    <option value="EASY">Easy</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HARD">Hard</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="time-period-filter">Time Period:</label>
+                <select id="time-period-filter">
+                    <option value="">All Time Periods</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="topic-filter">Topic:</label>
+                <select id="topic-filter">
+                    <option value="">All Topics</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="filter-row">
+            <div class="filter-group">
+                <label for="min-frequency">Min Frequency:</label>
+                <input type="number" id="min-frequency" min="0" max="100" step="1" value="0">
+            </div>
+            
+            <div class="filter-group">
+                <label for="min-acceptance">Min Acceptance Rate (%):</label>
+                <input type="number" id="min-acceptance" min="0" max="100" step="1" value="0">
+            </div>
+            
+            <div class="filter-group">
+                <label for="show-completed">Show Completed:</label>
+                <select id="show-completed">
+                    <option value="all">All Problems</option>
+                    <option value="completed">Completed Only</option>
+                    <option value="not-completed">Not Completed Only</option>
+                </select>
+            </div>
+            
+            <button id="apply-filters">Apply Filters</button>
+            <button id="reset-filters">Reset Filters</button>
+        </div>
+    </div>
+    
+    <div class="problems-section">
+        <h2>LeetCode Problems</h2>
+        <div class="count-info">
+            <div class="counts">
+                <span id="problem-count">0 problems found</span>
+                <span id="completed-count">0 completed</span>
+            </div>
+            <div class="actions">
+                <button id="export-csv" title="Export filtered problems to CSV">Export to CSV</button>
+            </div>
+        </div>
+        <div id="loading-indicator" class="loading">
+            <div class="spinner"></div>
+            <span>Loading problems...</span>
+        </div>
+        <table id="problems-table">
+            <thead>
+                <tr>
+                    <th>Done</th>
+                    <th class="sortable" data-sort="company">Company <span class="sort-icon">&#8597;</span></th>
+                    <th class="sortable" data-sort="timePeriod">Time Period <span class="sort-icon">&#8597;</span></th>
+                    <th class="sortable" data-sort="difficulty">Difficulty <span class="sort-icon">&#8597;</span></th>
+                    <th class="sortable" data-sort="title">Title <span class="sort-icon">&#8597;</span></th>
+                    <th class="sortable" data-sort="frequency">Frequency <span class="sort-icon">&#8597;</span></th>
+                    <th class="sortable" data-sort="acceptance">Acceptance Rate <span class="sort-icon">&#8597;</span></th>
+                    <th>Topics</th>
+                </tr>
+            </thead>
+            <tbody id="problems-body">
+                <!-- Problems will be dynamically added here -->
+            </tbody>
+        </table>
+        <div id="no-data-message">Upload a folder to view LeetCode problems</div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
