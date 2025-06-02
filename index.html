@@ -11,24 +11,28 @@
         <h1>LeetCode Problem Tracker</h1>
     </header>
     
-    <div class="upload-section">
-        <h2>Upload Data</h2>
-        <p>Upload your LeetCode problems folder to populate the data. Select the root folder containing company subfolders.</p>
-        <div class="upload-area">
-            <input type="file" id="folder-upload" webkitdirectory directory multiple />
-            <label for="folder-upload" class="file-label">Choose Folder</label>
-            <span id="selected-folder">No folder selected</span>
-            <button id="upload-btn">Load Data</button>
-        </div>
-        <div id="upload-status"></div>
-        <div class="storage-management">
-            <div id="storage-status"></div>
-            <button id="clear-data">Clear Saved Data</button>
-        </div>
-    </div>
-    
     <div class="filters">
-        <h2>Filters</h2>
+        <div class="filters-header">
+            <h2>Filters</h2>
+            <div class="compact-controls">
+                <div class="upload-section">
+                    <button id="upload-toggle" class="toggle-button" title="Upload data">📂 Upload Data</button>
+                    <div class="upload-panel">
+                        <div class="upload-area">
+                            <input type="file" id="folder-upload" webkitdirectory directory multiple />
+                            <label for="folder-upload" class="file-label">Choose Folder</label>
+                            <span id="selected-folder">No folder selected</span>
+                            <button id="upload-btn">Load Data</button>
+                        </div>
+                        <div id="upload-status"></div>   
+                        <div class="storage-management">
+                            <div id="storage-status"></div>
+                            <button id="clear-data">Clear Saved Data</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div class="search-box">
             <label for="search-input">Search:</label>
             <input type="text" id="search-input" placeholder="Search problems by title, company, topics...">

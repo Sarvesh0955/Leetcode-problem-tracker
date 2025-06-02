@@ -1106,6 +1106,30 @@ function updateSelectedFolder(files) {
     }
 }
 
+// Toggle upload panel
+function toggleUploadPanel() {
+    const uploadSection = document.querySelector('.upload-section');
+    uploadSection.classList.toggle('active');
+    
+    // Close panel when clicking outside
+    if (uploadSection.classList.contains('active')) {
+        setTimeout(() => {
+            document.addEventListener('click', closeUploadPanelOnClickOutside);
+        }, 100);
+    } else {
+        document.removeEventListener('click', closeUploadPanelOnClickOutside);
+    }
+}
+
+// Close upload panel when clicking outside
+function closeUploadPanelOnClickOutside(event) {
+    const uploadSection = document.querySelector('.upload-section');
+    if (!uploadSection.contains(event.target)) {
+        uploadSection.classList.remove('active');
+        document.removeEventListener('click', closeUploadPanelOnClickOutside);
+    }
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
     // Load completed problems
@@ -1125,6 +1149,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (companies.size > 0) {
             updateUploadStatus(`Loaded ${allProblems.length} problems from ${companies.size} companies.`);
         }
+    }
+    
+    // Set up upload toggle button
+    const uploadToggleBtn = document.getElementById('upload-toggle');
+    if (uploadToggleBtn) {
+        uploadToggleBtn.addEventListener('click', function(event) {
+            event.stopPropagation();
+            toggleUploadPanel();
+        });
     }
     
     // Set up Clear Data button
