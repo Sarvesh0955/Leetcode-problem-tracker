@@ -4,6 +4,7 @@ let companies = new Set();
 let topics = new Set();
 let timePeriods = new Set();
 let completedProblems = new Set();
+let revisionProblems = new Set();
 
 // Load completed problems from localStorage if available
 function loadCompletedProblems() {
@@ -17,6 +18,20 @@ function loadCompletedProblems() {
 // Save completed problems to localStorage
 function saveCompletedProblems() {
     localStorage.setItem('completedLeetCodeProblems', JSON.stringify([...completedProblems]));
+}
+
+// Load revision problems from localStorage if available
+function loadRevisionProblems() {
+    const saved = localStorage.getItem('revisionLeetCodeProblems');
+    if (saved) {
+        const savedArray = JSON.parse(saved);
+        revisionProblems = new Set(savedArray);
+    }
+}
+
+// Save revision problems to localStorage
+function saveRevisionProblems() {
+    localStorage.setItem('revisionLeetCodeProblems', JSON.stringify([...revisionProblems]));
 }
 
 // Helper function to check storage quota and availability
@@ -699,6 +714,7 @@ function filterProblems() {
         const minFrequency = parseFloat(document.getElementById('min-frequency').value) || 0;
         const minAcceptance = parseFloat(document.getElementById('min-acceptance').value) || 0;
         const showCompletedFilter = document.getElementById('show-completed').value;
+        const showRevisionFilter = document.getElementById('show-revision') ? document.getElementById('show-revision').value : 'all';
         const searchQuery = document.getElementById('search-input').value.toLowerCase();
         
         const filteredProblems = allProblems.filter(problem => {
@@ -743,6 +759,10 @@ function filterProblems() {
             // Check completed filter
             if (showCompletedFilter === 'completed' && !completedProblems.has(problem.Link)) return false;
             if (showCompletedFilter === 'not-completed' && completedProblems.has(problem.Link)) return false;
+            
+            // Check revision filter
+            if (showRevisionFilter === 'revision' && !revisionProblems.has(problem.Link)) return false;
+            if (showRevisionFilter === 'not-revision' && revisionProblems.has(problem.Link)) return false;
             
             // Check search query
             if (searchQuery) {
@@ -816,6 +836,31 @@ function displayProblems(problems) {
         });
         doneCell.appendChild(doneCheckbox);
         row.appendChild(doneCell);
+        
+        // Button for revision problems
+        const reviseCell = document.createElement('td');
+        const reviseButton = document.createElement('button');
+        reviseButton.className = 'revise-button';
+        reviseButton.classList.toggle('marked', revisionProblems.has(problem.Link));
+        reviseButton.innerHTML = reviseButton.classList.contains('marked') ? '★' : '☆';
+        reviseButton.title = reviseButton.classList.contains('marked') ? 'Remove from revision' : 'Mark for revision';
+        reviseButton.addEventListener('click', () => {
+            if (revisionProblems.has(problem.Link)) {
+                revisionProblems.delete(problem.Link);
+                reviseButton.innerHTML = '☆';
+                reviseButton.title = 'Mark for revision';
+                reviseButton.classList.remove('marked');
+            } else {
+                revisionProblems.add(problem.Link);
+                reviseButton.innerHTML = '★';
+                reviseButton.title = 'Remove from revision';
+                reviseButton.classList.add('marked');
+            }
+            saveRevisionProblems();
+            updateProblemCount(problems);
+        });
+        reviseCell.appendChild(reviseButton);
+        row.appendChild(reviseCell);
         
         // Company - show all companies that have this problem
         const companyCell = document.createElement('td');
@@ -892,7 +937,12 @@ function updateProblemCount(problems) {
     problemCount.textContent = `${problems.length} problems found`;
     
     const completed = problems.filter(p => completedProblems.has(p.Link)).length;
-    completedCount.textContent = `${completed} completed (${Math.round(completed / problems.length * 100) || 0}%)`;
+    const forRevision = problems.filter(p => revisionProblems.has(p.Link)).length;
+    
+    const completedPercent = Math.round(completed / problems.length * 100) || 0;
+    const revisionPercent = Math.round(forRevision / problems.length * 100) || 0;
+    
+    completedCount.textContent = `${completed} completed (${completedPercent}%), ${forRevision} for revision (${revisionPercent}%)`;
 }
 
 // Export problems to CSV
@@ -1072,6 +1122,7 @@ function clearSavedData() {
     topics.clear();
     timePeriods.clear();
     completedProblems.clear();
+    revisionProblems.clear();
     
     // Update UI
     updateStorageStatus();
@@ -1134,6 +1185,9 @@ function closeUploadPanelOnClickOutside(event) {
 document.addEventListener('DOMContentLoaded', () => {
     // Load completed problems
     loadCompletedProblems();
+    
+    // Load revision problems
+    loadRevisionProblems();
     
     // Update storage status display
     updateStorageStatus();
@@ -1206,6 +1260,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add event listener for show completed filter
     document.getElementById('show-completed').addEventListener('change', filterProblems);
     
+    // Add event listener for show revision filter
+    if (document.getElementById('show-revision')) {
+        document.getElementById('show-revision').addEventListener('change', filterProblems);
+    }
+    
     // Add event listeners for sortable column headers
     document.querySelectorAll('th.sortable').forEach(th => {
         th.addEventListener('click', () => {
@@ -1234,6 +1293,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('min-acceptance').value = 0;
         document.getElementById('search-input').value = '';
         document.getElementById('show-completed').value = 'all';
+        if (document.getElementById('show-revision')) {
+            document.getElementById('show-revision').value = 'all';
+        }
         filterProblems();
     });
     
@@ -1332,6 +1394,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add completed status
             formattedProblem.Completed = completedProblems.has(problem.Link) ? 'Yes' : 'No';
             
+            // Add revision status
+            formattedProblem.ForRevision = revisionProblems.has(problem.Link) ? 'Yes' : 'No';
+            
             // Format Company information
             if (Array.isArray(formattedProblem.Companies)) {
                 formattedProblem.Company = formattedProblem.Companies.join(', ');
@@ -1354,6 +1419,9 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('beforeunload', () => {
     // Save completed problems
     saveCompletedProblems();
+    
+    // Save revision problems
+    saveRevisionProblems();
     
     // No need to save all problems as they are already saved when uploaded/modified
     // and this could cause performance issues during page unload

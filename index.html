@@ -91,6 +91,15 @@
                 </select>
             </div>
             
+            <div class="filter-group">
+                <label for="show-revision">Show Revision:</label>
+                <select id="show-revision">
+                    <option value="all">All Problems</option>
+                    <option value="revision">For Revision Only</option>
+                    <option value="not-revision">Not For Revision Only</option>
+                </select>
+            </div>
+            
             <button id="apply-filters">Apply Filters</button>
             <button id="reset-filters">Reset Filters</button>
         </div>
@@ -115,6 +124,7 @@
             <thead>
                 <tr>
                     <th>Done</th>
+                    <th>Revise</th>
                     <th class="sortable" data-sort="company">Company <span class="sort-icon">&#8597;</span></th>
                     <th class="sortable" data-sort="timePeriod">Time Period <span class="sort-icon">&#8597;</span></th>
                     <th class="sortable" data-sort="difficulty">Difficulty <span class="sort-icon">&#8597;</span></th>

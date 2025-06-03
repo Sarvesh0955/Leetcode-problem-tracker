@@ -8,6 +8,7 @@ A web application to track and filter LeetCode problems from different companies
 - **Comprehensive Filtering**: Filter problems by company, difficulty, time period, topic, frequency, and acceptance rate.
 - **Search Functionality**: Quickly search for problems by title, company, or topics.
 - **Mark Problems as Completed**: Track your progress by marking problems as completed.
+- **Mark Problems for Revision**: Flag problems that you want to revisit or need more practice with.
 - **Sort Problems**: Sort problems by any column (company, difficulty, frequency, etc.).
 - **Export to CSV**: Export filtered problems to a CSV file for further analysis.
 
@@ -31,7 +32,8 @@ A web application to track and filter LeetCode problems from different companies
 
 3. **Track Progress**:
    - Check the "Done" checkbox for problems you've completed
-   - Use the "Show Completed" filter to view only completed or uncompleted problems
+   - Click the star button to mark problems for revision
+   - Use the "Show Completed" and "Show Revision" filters to focus on specific sets of problems
 
 4. **Export Data**:
    - Click the "Export to CSV" button to download your filtered problems
@@ -51,7 +53,7 @@ Each CSV file should contain columns like:
 The application automatically stores your data in your browser's local storage, enabling:
 
 - **Complete Data Persistence**: All problem data is saved automatically when you upload files.
-- **Completed Problem Tracking**: Your progress on completed problems is preserved.
+- **Progress Tracking**: Your completed problems and revision marks are preserved.
 - **Quick Loading**: Data loads automatically when you revisit the site, no need to re-upload files.
 - **Storage Management**: View your current storage usage and clear saved data if needed.
 
