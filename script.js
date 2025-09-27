@@ -416,10 +416,19 @@ async function handleFileUpload(event) {
                     existingProblem.TimePeriods.push(problem.TimePeriod);
                 }
                 
-                // Update frequency if the new one is higher
-                if (parseFloat(problem.Frequency) > parseFloat(existingProblem.Frequency || 0)) {
-                    existingProblem.Frequency = problem.Frequency;
+                // Store company-specific frequency
+                if (!existingProblem.FrequencyByCompany) {
+                    existingProblem.FrequencyByCompany = {};
+                    // Initialize with existing frequency if it exists
+                    if (existingProblem.Frequency) {
+                        existingProblem.FrequencyByCompany[existingProblem.Company] = existingProblem.Frequency;
+                    }
                 }
+                existingProblem.FrequencyByCompany[problem.Company] = problem.Frequency;
+                
+                // Update main frequency to be the highest across all companies
+                const allFreqs = Object.values(existingProblem.FrequencyByCompany).map(f => parseFloat(f) || 0);
+                existingProblem.Frequency = Math.max(...allFreqs).toString();
                 
                 // Merge topics if new ones are present
                 if (problem.Topics && existingProblem.Topics) {
@@ -440,6 +449,11 @@ async function handleFileUpload(event) {
                     existingProblem.Acceptance_Rate = problem.Acceptance_Rate;
                 }
             } else {
+                // Initialize FrequencyByCompany for new problem
+                if (problem.Frequency) {
+                    problem.FrequencyByCompany = {};
+                    problem.FrequencyByCompany[problem.Company] = problem.Frequency;
+                }
                 // Add new problem to the list
                 allProblems.push(problem);
             }
@@ -898,9 +912,23 @@ function displayProblems(problems) {
         titleCell.appendChild(titleLink);
         row.appendChild(titleCell);
         
-        // Frequency
+        // Frequency - show company-specific frequency if company filter is selected
         const frequencyCell = document.createElement('td');
-        frequencyCell.textContent = problem.Frequency;
+        const companyFilter = document.getElementById('company-filter').value;
+        
+        if (companyFilter && problem.FrequencyByCompany && problem.FrequencyByCompany[companyFilter]) {
+            // Show frequency specific to the selected company
+            frequencyCell.textContent = problem.FrequencyByCompany[companyFilter];
+        } else if (problem.FrequencyByCompany && Object.keys(problem.FrequencyByCompany).length > 0) {
+            // Show average frequency when no specific company is selected
+            const frequencies = Object.values(problem.FrequencyByCompany).map(f => parseFloat(f) || 0);
+            const avgFrequency = frequencies.reduce((sum, freq) => sum + freq, 0) / frequencies.length;
+            frequencyCell.textContent = avgFrequency.toFixed(1);
+            frequencyCell.title = `Average frequency across ${frequencies.length} companies`;
+        } else {
+            // Fallback to the general frequency
+            frequencyCell.textContent = problem.Frequency;
+        }
         row.appendChild(frequencyCell);
         
         // Acceptance Rate
