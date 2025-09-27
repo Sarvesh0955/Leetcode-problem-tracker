@@ -5,6 +5,7 @@ let topics = new Set();
 let timePeriods = new Set();
 let completedProblems = new Set();
 let revisionProblems = new Set();
+let problemNotes = new Map();
 
 // Load completed problems from localStorage if available
 function loadCompletedProblems() {
@@ -32,6 +33,21 @@ function loadRevisionProblems() {
 // Save revision problems to localStorage
 function saveRevisionProblems() {
     localStorage.setItem('revisionLeetCodeProblems', JSON.stringify([...revisionProblems]));
+}
+
+// Load problem notes from localStorage if available
+function loadProblemNotes() {
+    const saved = localStorage.getItem('leetCodeProblemNotes');
+    if (saved) {
+        const savedObject = JSON.parse(saved);
+        problemNotes = new Map(Object.entries(savedObject));
+    }
+}
+
+// Save problem notes to localStorage
+function saveProblemNotes() {
+    const notesObject = Object.fromEntries(problemNotes);
+    localStorage.setItem('leetCodeProblemNotes', JSON.stringify(notesObject));
 }
 
 // Helper function to check storage quota and availability
@@ -953,6 +969,78 @@ function displayProblems(problems) {
         }
         row.appendChild(topicsCell);
         
+        // Notes
+        const notesCell = document.createElement('td');
+        const notesContainer = document.createElement('div');
+        notesContainer.className = 'notes-container';
+        
+        const currentNote = problemNotes.get(problem.Link) || '';
+        
+        // Notes display/edit area
+        const notesDisplay = document.createElement('div');
+        notesDisplay.className = 'notes-display';
+        notesDisplay.textContent = currentNote || 'Click to add notes...';
+        notesDisplay.style.cursor = 'pointer';
+        notesDisplay.style.minHeight = '20px';
+        notesDisplay.style.padding = '4px';
+        notesDisplay.style.borderRadius = '3px';
+        if (!currentNote) {
+            notesDisplay.style.color = '#888';
+            notesDisplay.style.fontStyle = 'italic';
+        }
+        
+        const notesInput = document.createElement('textarea');
+        notesInput.className = 'notes-input';
+        notesInput.value = currentNote;
+        notesInput.style.display = 'none';
+        notesInput.style.width = '100%';
+        notesInput.style.minHeight = '60px';
+        notesInput.style.resize = 'vertical';
+        
+        // Click to edit notes
+        notesDisplay.addEventListener('click', () => {
+            notesDisplay.style.display = 'none';
+            notesInput.style.display = 'block';
+            notesInput.focus();
+        });
+        
+        // Save notes on blur or Enter+Ctrl
+        const saveNotes = () => {
+            const noteText = notesInput.value.trim();
+            if (noteText) {
+                problemNotes.set(problem.Link, noteText);
+                notesDisplay.textContent = noteText;
+                notesDisplay.style.color = '';
+                notesDisplay.style.fontStyle = '';
+            } else {
+                problemNotes.delete(problem.Link);
+                notesDisplay.textContent = 'Click to add notes...';
+                notesDisplay.style.color = '#888';
+                notesDisplay.style.fontStyle = 'italic';
+            }
+            saveProblemNotes();
+            notesInput.style.display = 'none';
+            notesDisplay.style.display = 'block';
+        };
+        
+        notesInput.addEventListener('blur', saveNotes);
+        notesInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                saveNotes();
+            }
+            if (e.key === 'Escape') {
+                notesInput.value = currentNote;
+                notesInput.style.display = 'none';
+                notesDisplay.style.display = 'block';
+            }
+        });
+        
+        notesContainer.appendChild(notesDisplay);
+        notesContainer.appendChild(notesInput);
+        notesCell.appendChild(notesContainer);
+        row.appendChild(notesCell);
+        
         tableBody.appendChild(row);
     });
 }
@@ -998,6 +1086,9 @@ function exportToCSV(problems) {
         'Link', 
         'Topics'
     ].filter(h => headers.has(h));
+
+    // Add Notes column (not part of problem object, comes from problemNotes map)
+    orderedHeaders.push('Notes');
     
     // Add any remaining headers
     headers.forEach(header => {
@@ -1011,7 +1102,12 @@ function exportToCSV(problems) {
     
     problems.forEach(problem => {
         const row = orderedHeaders.map(header => {
-            let value = problem[header] || '';
+            let value = '';
+            if (header === 'Notes') {
+                value = problemNotes.get(problem.Link) || '';
+            } else {
+                value = problem[header] || '';
+            }
             
             // Handle arrays (Companies, TimePeriods)
             if (Array.isArray(value)) {
@@ -1019,13 +1115,11 @@ function exportToCSV(problems) {
             }
             
             // Escape quotes and wrap in quotes if needed
-            if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
                 value = '"' + value.replace(/"/g, '""') + '"';
             }
-            
             return value;
         });
-        
         csv += row.join(',') + '\n';
     });
     
@@ -1216,6 +1310,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Load revision problems
     loadRevisionProblems();
+    
+    // Load problem notes
+    loadProblemNotes();
     
     // Update storage status display
     updateStorageStatus();

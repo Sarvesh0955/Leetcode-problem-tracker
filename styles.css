@@ -191,6 +191,34 @@ tr:hover {
     font-size: 12px;
 }
 
+/* Notes styling */
+.notes-container {
+    max-width: 200px;
+}
+
+.notes-display {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 3px;
+    word-wrap: break-word;
+    font-size: 12px;
+    transition: background-color 0.2s;
+}
+
+.notes-display:hover {
+    background-color: #e9ecef;
+}
+
+.notes-input {
+    border: 1px solid #007acc;
+    border-radius: 3px;
+    padding: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
 #upload-btn {
     background-color: #0078d7;
     color: white;
