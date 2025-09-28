@@ -976,68 +976,19 @@ function displayProblems(problems) {
         
         const currentNote = problemNotes.get(problem.Link) || '';
         
-        // Notes display/edit area
-        const notesDisplay = document.createElement('div');
-        notesDisplay.className = 'notes-display';
-        notesDisplay.textContent = currentNote || 'Click to add notes...';
-        notesDisplay.style.cursor = 'pointer';
-        notesDisplay.style.minHeight = '20px';
-        notesDisplay.style.padding = '4px';
-        notesDisplay.style.borderRadius = '3px';
-        if (!currentNote) {
-            notesDisplay.style.color = '#888';
-            notesDisplay.style.fontStyle = 'italic';
-        }
+        // Notes button
+        const notesButton = document.createElement('button');
+        notesButton.className = currentNote ? 'notes-button has-notes' : 'notes-button';
+        notesButton.innerHTML = currentNote ? 
+            '<span class="notes-icon">📝</span> View Notes' : 
+            '<span class="notes-icon">📝</span> Add Notes';
         
-        const notesInput = document.createElement('textarea');
-        notesInput.className = 'notes-input';
-        notesInput.value = currentNote;
-        notesInput.style.display = 'none';
-        notesInput.style.width = '100%';
-        notesInput.style.minHeight = '60px';
-        notesInput.style.resize = 'vertical';
-        
-        // Click to edit notes
-        notesDisplay.addEventListener('click', () => {
-            notesDisplay.style.display = 'none';
-            notesInput.style.display = 'block';
-            notesInput.focus();
+        // Click to open notes modal
+        notesButton.addEventListener('click', () => {
+            openNotesModal(problem, currentNote);
         });
         
-        // Save notes on blur or Enter+Ctrl
-        const saveNotes = () => {
-            const noteText = notesInput.value.trim();
-            if (noteText) {
-                problemNotes.set(problem.Link, noteText);
-                notesDisplay.textContent = noteText;
-                notesDisplay.style.color = '';
-                notesDisplay.style.fontStyle = '';
-            } else {
-                problemNotes.delete(problem.Link);
-                notesDisplay.textContent = 'Click to add notes...';
-                notesDisplay.style.color = '#888';
-                notesDisplay.style.fontStyle = 'italic';
-            }
-            saveProblemNotes();
-            notesInput.style.display = 'none';
-            notesDisplay.style.display = 'block';
-        };
-        
-        notesInput.addEventListener('blur', saveNotes);
-        notesInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && e.ctrlKey) {
-                e.preventDefault();
-                saveNotes();
-            }
-            if (e.key === 'Escape') {
-                notesInput.value = currentNote;
-                notesInput.style.display = 'none';
-                notesDisplay.style.display = 'block';
-            }
-        });
-        
-        notesContainer.appendChild(notesDisplay);
-        notesContainer.appendChild(notesInput);
+        notesContainer.appendChild(notesButton);
         notesCell.appendChild(notesContainer);
         row.appendChild(notesCell);
         
@@ -1552,4 +1503,129 @@ window.addEventListener('beforeunload', () => {
     // and this could cause performance issues during page unload
     
     return undefined; // Allow normal page unload
+});
+
+// Notes Modal Functionality
+let currentNoteProblem = null;
+
+function openNotesModal(problem, currentNote) {
+    currentNoteProblem = problem;
+    
+    const modal = document.getElementById('notes-modal');
+    const problemTitle = document.getElementById('notes-problem-title');
+    const problemLink = document.getElementById('notes-problem-link');
+    const textarea = document.getElementById('notes-textarea');
+    
+    // Set problem information
+    problemTitle.textContent = problem.Title;
+    problemLink.innerHTML = `<a href="${problem.Link}" target="_blank" rel="noopener noreferrer">${problem.Link}</a>`;
+    
+    // Set current notes
+    textarea.value = currentNote;
+    
+    // Show modal
+    modal.style.display = 'block';
+    
+    // Focus on textarea
+    setTimeout(() => textarea.focus(), 100);
+}
+
+function closeNotesModal() {
+    const modal = document.getElementById('notes-modal');
+    modal.style.display = 'none';
+    currentNoteProblem = null;
+}
+
+function saveNotesFromModal() {
+    if (!currentNoteProblem) return;
+    
+    const textarea = document.getElementById('notes-textarea');
+    const noteText = textarea.value.trim();
+    
+    if (noteText) {
+        problemNotes.set(currentNoteProblem.Link, noteText);
+    } else {
+        problemNotes.delete(currentNoteProblem.Link);
+    }
+    
+    saveProblemNotes();
+    
+    // Update the button in the table
+    updateNotesButton(currentNoteProblem, noteText);
+    
+    closeNotesModal();
+}
+
+function updateNotesButton(problem, noteText) {
+    // Find the button for this problem and update it
+    const tableBody = document.getElementById('problems-body');
+    const rows = tableBody.querySelectorAll('tr');
+    
+    rows.forEach(row => {
+        const linkCell = row.querySelector('td:nth-child(6) a'); // Title column with link
+        if (linkCell && linkCell.href === problem.Link) {
+            const button = row.querySelector('.notes-button');
+            if (button) {
+                if (noteText) {
+                    button.className = 'notes-button has-notes';
+                    button.innerHTML = '<span class="notes-icon">📝</span> View Notes';
+                } else {
+                    button.className = 'notes-button';
+                    button.innerHTML = '<span class="notes-icon">📝</span> Add Notes';
+                }
+            }
+        }
+    });
+}
+
+function clearNotesFromModal() {
+    const textarea = document.getElementById('notes-textarea');
+    textarea.value = '';
+    textarea.focus();
+}
+
+// Event listeners for modal
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('notes-modal');
+    const closeBtn = document.querySelector('.modal-close');
+    const saveBtn = document.getElementById('save-notes');
+    const cancelBtn = document.getElementById('cancel-notes');
+    const clearBtn = document.getElementById('clear-notes');
+    const textarea = document.getElementById('notes-textarea');
+    
+    // Close modal events
+    closeBtn.addEventListener('click', closeNotesModal);
+    cancelBtn.addEventListener('click', closeNotesModal);
+    
+    // Save notes
+    saveBtn.addEventListener('click', saveNotesFromModal);
+    
+    // Clear notes
+    clearBtn.addEventListener('click', clearNotesFromModal);
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeNotesModal();
+        }
+    });
+    
+    // Keyboard shortcuts
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            saveNotesFromModal();
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeNotesModal();
+        }
+    });
+    
+    // Close modal with Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'block') {
+            closeNotesModal();
+        }
+    });
 });

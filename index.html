@@ -142,6 +142,36 @@
         <div id="no-data-message">Upload a folder to view LeetCode problems</div>
     </div>
     
+    <!-- Notes Popup Modal -->
+    <div id="notes-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="notes-modal-title">Problem Notes</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="notes-info">
+                    <h4 id="notes-problem-title"></h4>
+                    <p id="notes-problem-link"></p>
+                </div>
+                <div class="notes-editor">
+                    <label for="notes-textarea">Your Notes:</label>
+                    <textarea id="notes-textarea" placeholder="Add your notes, thoughts, approach, or solution details here..."></textarea>
+                    <div class="notes-toolbar">
+                        <div class="toolbar-info">
+                            <small>Tips: Use Ctrl+Enter to save quickly, Escape to cancel</small>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button id="clear-notes" class="btn-secondary" title="Clear all notes">Clear</button>
+                            <button id="cancel-notes" class="btn-secondary">Cancel</button>
+                            <button id="save-notes" class="btn-primary">Save Notes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script src="script.js"></script>
 </body>
 </html>
