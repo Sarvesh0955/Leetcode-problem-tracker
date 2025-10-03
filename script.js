@@ -731,101 +731,106 @@ function updateSortHeader() {
 let currentSortColumn = 'company';
 let currentSortDirection = 'asc';
 
+// Helper function to get filtered problems based on current filter criteria
+function getFilteredProblems() {
+    const companyFilter = document.getElementById('company-filter').value;
+    const difficultyFilter = document.getElementById('difficulty-filter').value;
+    const timePeriodFilter = document.getElementById('time-period-filter').value;
+    const topicFilter = document.getElementById('topic-filter').value;
+    const minFrequency = parseFloat(document.getElementById('min-frequency').value) || 0;
+    const minAcceptance = parseFloat(document.getElementById('min-acceptance').value) || 0;
+    const showCompletedFilter = document.getElementById('show-completed').value;
+    const showRevisionFilter = document.getElementById('show-revision') ? document.getElementById('show-revision').value : 'all';
+    const searchQuery = document.getElementById('search-input').value.toLowerCase();
+    
+    return allProblems.filter(problem => {
+        // Check company filter
+        if (companyFilter) {
+            if (Array.isArray(problem.Companies)) {
+                if (!problem.Companies.includes(companyFilter)) return false;
+            } else if (problem.Company !== companyFilter) {
+                return false;
+            }
+        }
+        
+        // Check difficulty filter
+        if (difficultyFilter && problem.Difficulty !== difficultyFilter) return false;
+        
+        // Check time period filter
+        if (timePeriodFilter) {
+            if (Array.isArray(problem.TimePeriods)) {
+                if (!problem.TimePeriods.includes(timePeriodFilter)) return false;
+            } else if (problem.TimePeriod !== timePeriodFilter) {
+                return false;
+            }
+        }
+        
+        // Check topic filter
+        if (topicFilter && (!problem.Topics || !problem.Topics.includes(topicFilter))) return false;
+        
+        // Check frequency filter
+        if (minFrequency > 0) {
+            const frequency = parseFloat(problem.Frequency);
+            if (isNaN(frequency) || frequency < minFrequency) return false;
+        }
+        
+        // Check acceptance rate filter
+        if (minAcceptance > 0) {
+            // Handle both "Acceptance Rate" and "Acceptance_Rate" field names
+            const rateValue = problem["Acceptance Rate"] || problem.Acceptance_Rate;
+            const acceptanceRate = parseFloat(rateValue) * 100;
+            if (isNaN(acceptanceRate) || acceptanceRate < minAcceptance) return false;
+        }
+        
+        // Check completed filter
+        if (showCompletedFilter === 'completed' && !completedProblems.has(problem.Link)) return false;
+        if (showCompletedFilter === 'not-completed' && completedProblems.has(problem.Link)) return false;
+        
+        // Check revision filter
+        if (showRevisionFilter === 'revision' && !revisionProblems.has(problem.Link)) return false;
+        if (showRevisionFilter === 'not-revision' && revisionProblems.has(problem.Link)) return false;
+        
+        // Check search query
+        if (searchQuery) {
+            const title = problem.Title?.toLowerCase() || '';
+            
+            // Handle company search in either Company string or Companies array
+            let companyMatch = false;
+            if (Array.isArray(problem.Companies)) {
+                companyMatch = problem.Companies.some(c => c.toLowerCase().includes(searchQuery));
+            } else {
+                companyMatch = (problem.Company?.toLowerCase() || '').includes(searchQuery);
+            }
+            
+            // Handle time period search
+            let timeMatch = false;
+            if (Array.isArray(problem.TimePeriods)) {
+                timeMatch = problem.TimePeriods.some(t => t.toLowerCase().includes(searchQuery));
+            } else {
+                timeMatch = (problem.TimePeriod?.toLowerCase() || '').includes(searchQuery);
+            }
+            
+            const topics = problem.Topics?.toLowerCase() || '';
+            
+            if (!title.includes(searchQuery) && 
+                !companyMatch && 
+                !timeMatch &&
+                !topics.includes(searchQuery)) {
+                return false;
+            }
+        }
+        
+        return true;
+    });
+}
+
 // Filter problems based on selected criteria
 function filterProblems() {
     setLoading(true);
     
     // Use setTimeout to allow UI to update before heavy processing
     setTimeout(() => {
-        const companyFilter = document.getElementById('company-filter').value;
-        const difficultyFilter = document.getElementById('difficulty-filter').value;
-        const timePeriodFilter = document.getElementById('time-period-filter').value;
-        const topicFilter = document.getElementById('topic-filter').value;
-        const minFrequency = parseFloat(document.getElementById('min-frequency').value) || 0;
-        const minAcceptance = parseFloat(document.getElementById('min-acceptance').value) || 0;
-        const showCompletedFilter = document.getElementById('show-completed').value;
-        const showRevisionFilter = document.getElementById('show-revision') ? document.getElementById('show-revision').value : 'all';
-        const searchQuery = document.getElementById('search-input').value.toLowerCase();
-        
-        const filteredProblems = allProblems.filter(problem => {
-            // Check company filter
-            if (companyFilter) {
-                if (Array.isArray(problem.Companies)) {
-                    if (!problem.Companies.includes(companyFilter)) return false;
-                } else if (problem.Company !== companyFilter) {
-                    return false;
-                }
-            }
-            
-            // Check difficulty filter
-            if (difficultyFilter && problem.Difficulty !== difficultyFilter) return false;
-            
-            // Check time period filter
-            if (timePeriodFilter) {
-                if (Array.isArray(problem.TimePeriods)) {
-                    if (!problem.TimePeriods.includes(timePeriodFilter)) return false;
-                } else if (problem.TimePeriod !== timePeriodFilter) {
-                    return false;
-                }
-            }
-            
-            // Check topic filter
-            if (topicFilter && (!problem.Topics || !problem.Topics.includes(topicFilter))) return false;
-            
-            // Check frequency filter
-            if (minFrequency > 0) {
-                const frequency = parseFloat(problem.Frequency);
-                if (isNaN(frequency) || frequency < minFrequency) return false;
-            }
-            
-            // Check acceptance rate filter
-            if (minAcceptance > 0) {
-                // Handle both "Acceptance Rate" and "Acceptance_Rate" field names
-                const rateValue = problem["Acceptance Rate"] || problem.Acceptance_Rate;
-                const acceptanceRate = parseFloat(rateValue) * 100;
-                if (isNaN(acceptanceRate) || acceptanceRate < minAcceptance) return false;
-            }
-            
-            // Check completed filter
-            if (showCompletedFilter === 'completed' && !completedProblems.has(problem.Link)) return false;
-            if (showCompletedFilter === 'not-completed' && completedProblems.has(problem.Link)) return false;
-            
-            // Check revision filter
-            if (showRevisionFilter === 'revision' && !revisionProblems.has(problem.Link)) return false;
-            if (showRevisionFilter === 'not-revision' && revisionProblems.has(problem.Link)) return false;
-            
-            // Check search query
-            if (searchQuery) {
-                const title = problem.Title?.toLowerCase() || '';
-                
-                // Handle company search in either Company string or Companies array
-                let companyMatch = false;
-                if (Array.isArray(problem.Companies)) {
-                    companyMatch = problem.Companies.some(c => c.toLowerCase().includes(searchQuery));
-                } else {
-                    companyMatch = (problem.Company?.toLowerCase() || '').includes(searchQuery);
-                }
-                
-                // Handle time period search
-                let timeMatch = false;
-                if (Array.isArray(problem.TimePeriods)) {
-                    timeMatch = problem.TimePeriods.some(t => t.toLowerCase().includes(searchQuery));
-                } else {
-                    timeMatch = (problem.TimePeriod?.toLowerCase() || '').includes(searchQuery);
-                }
-                
-                const topics = problem.Topics?.toLowerCase() || '';
-                
-                if (!title.includes(searchQuery) && 
-                    !companyMatch && 
-                    !timeMatch &&
-                    !topics.includes(searchQuery)) {
-                    return false;
-                }
-            }
-            
-            return true;
-        });
+        const filteredProblems = getFilteredProblems();
         
         // Sort the filtered problems
         const sortedProblems = sortProblems(filteredProblems, currentSortColumn, currentSortDirection);
@@ -1378,89 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set up export to CSV functionality
     document.getElementById('export-csv').addEventListener('click', () => {
         // Get currently filtered problems
-        const companyFilter = document.getElementById('company-filter').value;
-        const difficultyFilter = document.getElementById('difficulty-filter').value;
-        const timePeriodFilter = document.getElementById('time-period-filter').value;
-        const topicFilter = document.getElementById('topic-filter').value;
-        const minFrequency = parseFloat(document.getElementById('min-frequency').value) || 0;
-        const minAcceptance = parseFloat(document.getElementById('min-acceptance').value) || 0;
-        const showCompletedFilter = document.getElementById('show-completed').value;
-        const searchQuery = document.getElementById('search-input').value.toLowerCase();
-        
-        const filteredProblems = allProblems.filter(problem => {
-            // Check company filter
-            if (companyFilter) {
-                if (Array.isArray(problem.Companies)) {
-                    if (!problem.Companies.includes(companyFilter)) return false;
-                } else if (problem.Company !== companyFilter) {
-                    return false;
-                }
-            }
-            
-            // Check difficulty filter
-            if (difficultyFilter && problem.Difficulty !== difficultyFilter) return false;
-            
-            // Check time period filter
-            if (timePeriodFilter) {
-                if (Array.isArray(problem.TimePeriods)) {
-                    if (!problem.TimePeriods.includes(timePeriodFilter)) return false;
-                } else if (problem.TimePeriod !== timePeriodFilter) {
-                    return false;
-                }
-            }
-            
-            // Check topic filter
-            if (topicFilter && (!problem.Topics || !problem.Topics.includes(topicFilter))) return false;
-            
-            // Check frequency filter
-            if (minFrequency > 0) {
-                const frequency = parseFloat(problem.Frequency);
-                if (isNaN(frequency) || frequency < minFrequency) return false;
-            }
-            
-            // Check acceptance rate filter
-            if (minAcceptance > 0) {
-                const rateValue = problem["Acceptance Rate"] || problem.Acceptance_Rate;
-                const acceptanceRate = parseFloat(rateValue) * 100;
-                if (isNaN(acceptanceRate) || acceptanceRate < minAcceptance) return false;
-            }
-            
-            // Check completed filter
-            if (showCompletedFilter === 'completed' && !completedProblems.has(problem.Link)) return false;
-            if (showCompletedFilter === 'not-completed' && completedProblems.has(problem.Link)) return false;
-            
-            // Check search query
-            if (searchQuery) {
-                const title = problem.Title?.toLowerCase() || '';
-                
-                // Handle company search in either Company string or Companies array
-                let companyMatch = false;
-                if (Array.isArray(problem.Companies)) {
-                    companyMatch = problem.Companies.some(c => c.toLowerCase().includes(searchQuery));
-                } else {
-                    companyMatch = (problem.Company?.toLowerCase() || '').includes(searchQuery);
-                }
-                
-                // Handle time period search
-                let timeMatch = false;
-                if (Array.isArray(problem.TimePeriods)) {
-                    timeMatch = problem.TimePeriods.some(t => t.toLowerCase().includes(searchQuery));
-                } else {
-                    timeMatch = (problem.TimePeriod?.toLowerCase() || '').includes(searchQuery);
-                }
-                
-                const topics = problem.Topics?.toLowerCase() || '';
-                
-                if (!title.includes(searchQuery) && 
-                    !companyMatch && 
-                    !timeMatch &&
-                    !topics.includes(searchQuery)) {
-                    return false;
-                }
-            }
-            
-            return true;
-        });
+        const filteredProblems = getFilteredProblems();
         
         // Add completed status to the problems and format arrays for CSV
         const problemsWithStatus = filteredProblems.map(problem => {
@@ -1489,7 +1412,106 @@ document.addEventListener('DOMContentLoaded', () => {
         // Export filtered problems
         exportToCSV(problemsWithStatus);
     });
+    
+    // Set up random problem functionality
+    document.getElementById('random-problem').addEventListener('click', () => {
+        // Get currently filtered problems
+        const filteredProblems = getFilteredProblems();
+        
+        // Filter out completed problems to get only unsolved ones
+        const unsolvedProblems = filteredProblems.filter(problem => !completedProblems.has(problem.Link));
+        
+        if (unsolvedProblems.length === 0) {
+            alert('No unsolved problems found with the current filters!');
+            return;
+        }
+        
+        // Get a random unsolved problem
+        const randomIndex = Math.floor(Math.random() * unsolvedProblems.length);
+        const randomProblem = unsolvedProblems[randomIndex];
+        
+        // Clear the table and show all filtered problems (so we can highlight the selected one)
+        filterProblems();
+        
+        // Wait for the table to be updated, then highlight the random problem
+        setTimeout(() => {
+            highlightRandomProblem(randomProblem);
+        }, 100);
+    });
 });
+
+// Function to highlight and scroll to a specific problem in the table
+function highlightRandomProblem(problem) {
+    // Find all table rows
+    const tableRows = document.querySelectorAll('#problems-body tr');
+    
+    // Remove any existing highlights
+    tableRows.forEach(row => {
+        row.classList.remove('highlighted-problem');
+    });
+    
+    // Find the row with the matching problem link
+    let targetRow = null;
+    tableRows.forEach(row => {
+        const linkCell = row.querySelector('td a[href="' + problem.Link + '"]');
+        if (linkCell) {
+            targetRow = row;
+        }
+    });
+    
+    if (targetRow) {
+        // Add highlight class
+        targetRow.classList.add('highlighted-problem');
+        
+        // Scroll to the highlighted row
+        targetRow.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+        
+        // Show notification
+        showRandomProblemNotification(problem);
+        
+        // Remove highlight after 5 seconds
+        setTimeout(() => {
+            targetRow.classList.remove('highlighted-problem');
+        }, 5000);
+    }
+}
+
+// Function to show a notification for the selected random problem
+function showRandomProblemNotification(problem) {
+    // Create notification element if it doesn't exist
+    let notification = document.getElementById('random-problem-notification');
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.id = 'random-problem-notification';
+        notification.className = 'random-notification';
+        document.body.appendChild(notification);
+    }
+    
+    // Set notification content
+    const difficulty = problem.Difficulty || 'Unknown';
+    const title = problem.Title || 'Unknown Problem';
+    notification.innerHTML = `
+        <div class="notification-content">
+            <h3>🎲 Random Problem Selected!</h3>
+            <p><strong>${title}</strong></p>
+            <span class="difficulty-badge ${difficulty.toLowerCase()}">${difficulty}</span>
+        </div>
+        <button class="notification-close" onclick="this.parentElement.style.display='none'">×</button>
+    `;
+    
+    // Show notification
+    notification.style.display = 'block';
+    
+    // Auto-hide after 4 seconds
+    setTimeout(() => {
+        if (notification.style.display !== 'none') {
+            notification.style.display = 'none';
+        }
+    }, 4000);
+}
 
 // Add event listener for page unload to ensure data is saved
 window.addEventListener('beforeunload', () => {

@@ -11,6 +11,7 @@ A web application to track and filter LeetCode problems from different companies
 - **Mark Problems for Revision**: Flag problems that you want to revisit or need more practice with.
 - **Sort Problems**: Sort problems by any column (company, difficulty, frequency, etc.).
 - **Export to CSV**: Export filtered problems to a CSV file for further analysis.
+- **Random Problem Selection**: Get a random unsolved problem from the currently applied filters to practice with.
 
 ## How to Use
 
@@ -37,6 +38,11 @@ A web application to track and filter LeetCode problems from different companies
 
 4. **Export Data**:
    - Click the "Export to CSV" button to download your filtered problems
+
+5. **Random Problem Practice**:
+   - Click the "🎲 Random Problem" button to get a random unsolved problem from your current filters
+   - The selected problem will be highlighted and scrolled into view automatically
+   - A notification will show the selected problem's details
 
 ## CSV File Format
 
