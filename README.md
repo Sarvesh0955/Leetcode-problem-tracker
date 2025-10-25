@@ -70,3 +70,7 @@ Browser local storage is limited (typically 5-10MB). If you upload a very large 
 - The application will automatically prioritize higher frequency problems if space is limited
 - You can always clear the saved data and start fresh
 - Your completed problem markers will be saved separately from the main dataset
+
+### Problems Repo
+
+https://github.com/liquidslr/leetcode-company-wise-problems
