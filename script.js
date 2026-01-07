@@ -7,47 +7,292 @@ let completedProblems = new Set();
 let revisionProblems = new Set();
 let problemNotes = new Map();
 
+// ============================================================================
+// BACKUP STORAGE SYSTEM
+// ============================================================================
+// This application uses a dual-storage approach for data persistence:
+// 1. PRIMARY: localStorage - Fast access, ~5-10MB limit
+// 2. BACKUP: IndexedDB - Automatic backup, larger capacity, more persistent
+//
+// How it works:
+// - All data is saved to BOTH localStorage and IndexedDB simultaneously
+// - If localStorage is cleared (browser settings, incognito mode, etc.),
+//   the app automatically restores data from IndexedDB backup
+// - IndexedDB is more resilient to accidental data loss
+// - Both storages are cleared only when explicitly requested by the user
+// ============================================================================
+
+// IndexedDB for backup storage
+let db = null;
+const DB_NAME = 'LeetCodeTrackerDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'backupData';
+
+// Initialize IndexedDB
+function initIndexedDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        
+        request.onerror = () => {
+            console.error('IndexedDB failed to open:', request.error);
+            reject(request.error);
+        };
+        
+        request.onsuccess = () => {
+            db = request.result;
+            console.log('IndexedDB initialized successfully');
+            resolve(db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                const objectStore = db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+                objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+                console.log('IndexedDB object store created');
+            }
+        };
+    });
+}
+
+// Save data to IndexedDB
+function saveToIndexedDB(key, value) {
+    return new Promise((resolve, reject) => {
+        if (!db) {
+            reject('IndexedDB not initialized');
+            return;
+        }
+        
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const data = {
+            key: key,
+            value: value,
+            timestamp: new Date().toISOString()
+        };
+        
+        const request = store.put(data);
+        
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Load data from IndexedDB
+function loadFromIndexedDB(key) {
+    return new Promise((resolve, reject) => {
+        if (!db) {
+            reject('IndexedDB not initialized');
+            return;
+        }
+        
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.get(key);
+        
+        request.onsuccess = () => {
+            if (request.result) {
+                resolve(request.result.value);
+            } else {
+                resolve(null);
+            }
+        };
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Load all data from IndexedDB
+function loadAllFromIndexedDB() {
+    return new Promise((resolve, reject) => {
+        if (!db) {
+            reject('IndexedDB not initialized');
+            return;
+        }
+        
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+        
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Sync data from IndexedDB to localStorage
+async function syncFromBackup() {
+    try {
+        const keys = [
+            'completedLeetCodeProblems',
+            'revisionLeetCodeProblems',
+            'leetCodeProblemNotes',
+            'leetCodeProblems',
+            'leetCodeCompanies',
+            'leetCodeTopics',
+            'leetCodeTimePeriods',
+            'leetCodeLastSaved',
+            'leetCodeDataTruncated'
+        ];
+        
+        let restoredCount = 0;
+        for (const key of keys) {
+            // Only restore if localStorage doesn't have it
+            if (!localStorage.getItem(key)) {
+                const backupValue = await loadFromIndexedDB(key);
+                if (backupValue) {
+                    localStorage.setItem(key, backupValue);
+                    restoredCount++;
+                }
+            }
+        }
+        
+        if (restoredCount > 0) {
+            console.log(`Restored ${restoredCount} items from IndexedDB backup`);
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Failed to sync from backup:', error);
+        return false;
+    }
+}
+
+// Backup localStorage to IndexedDB
+async function backupToIndexedDB() {
+    try {
+        const keys = [
+            'completedLeetCodeProblems',
+            'revisionLeetCodeProblems',
+            'leetCodeProblemNotes',
+            'leetCodeProblems',
+            'leetCodeCompanies',
+            'leetCodeTopics',
+            'leetCodeTimePeriods',
+            'leetCodeLastSaved',
+            'leetCodeDataTruncated'
+        ];
+        
+        for (const key of keys) {
+            const value = localStorage.getItem(key);
+            if (value) {
+                await saveToIndexedDB(key, value);
+            }
+        }
+        
+        console.log('Successfully backed up data to IndexedDB');
+        return true;
+    } catch (error) {
+        console.error('Failed to backup to IndexedDB:', error);
+        return false;
+    }
+}
+
 // Load completed problems from localStorage if available
-function loadCompletedProblems() {
+async function loadCompletedProblems() {
     const saved = localStorage.getItem('completedLeetCodeProblems');
     if (saved) {
         const savedArray = JSON.parse(saved);
         completedProblems = new Set(savedArray);
+    } else if (db) {
+        // Try to restore from IndexedDB backup
+        try {
+            const backupValue = await loadFromIndexedDB('completedLeetCodeProblems');
+            if (backupValue) {
+                const savedArray = JSON.parse(backupValue);
+                completedProblems = new Set(savedArray);
+                localStorage.setItem('completedLeetCodeProblems', backupValue);
+                console.log('Restored completed problems from backup');
+            }
+        } catch (error) {
+            console.error('Failed to restore from backup:', error);
+        }
     }
 }
 
 // Save completed problems to localStorage
-function saveCompletedProblems() {
-    localStorage.setItem('completedLeetCodeProblems', JSON.stringify([...completedProblems]));
+async function saveCompletedProblems() {
+    const data = JSON.stringify([...completedProblems]);
+    localStorage.setItem('completedLeetCodeProblems', data);
+    // Also backup to IndexedDB
+    if (db) {
+        try {
+            await saveToIndexedDB('completedLeetCodeProblems', data);
+        } catch (error) {
+            console.error('Failed to backup completed problems:', error);
+        }
+    }
 }
 
 // Load revision problems from localStorage if available
-function loadRevisionProblems() {
+async function loadRevisionProblems() {
     const saved = localStorage.getItem('revisionLeetCodeProblems');
     if (saved) {
         const savedArray = JSON.parse(saved);
         revisionProblems = new Set(savedArray);
+    } else if (db) {
+        // Try to restore from IndexedDB backup
+        try {
+            const backupValue = await loadFromIndexedDB('revisionLeetCodeProblems');
+            if (backupValue) {
+                const savedArray = JSON.parse(backupValue);
+                revisionProblems = new Set(savedArray);
+                localStorage.setItem('revisionLeetCodeProblems', backupValue);
+                console.log('Restored revision problems from backup');
+            }
+        } catch (error) {
+            console.error('Failed to restore from backup:', error);
+        }
     }
 }
 
 // Save revision problems to localStorage
-function saveRevisionProblems() {
-    localStorage.setItem('revisionLeetCodeProblems', JSON.stringify([...revisionProblems]));
+async function saveRevisionProblems() {
+    const data = JSON.stringify([...revisionProblems]);
+    localStorage.setItem('revisionLeetCodeProblems', data);
+    // Also backup to IndexedDB
+    if (db) {
+        try {
+            await saveToIndexedDB('revisionLeetCodeProblems', data);
+        } catch (error) {
+            console.error('Failed to backup revision problems:', error);
+        }
+    }
 }
 
 // Load problem notes from localStorage if available
-function loadProblemNotes() {
+async function loadProblemNotes() {
     const saved = localStorage.getItem('leetCodeProblemNotes');
     if (saved) {
         const savedObject = JSON.parse(saved);
         problemNotes = new Map(Object.entries(savedObject));
+    } else if (db) {
+        // Try to restore from IndexedDB backup
+        try {
+            const backupValue = await loadFromIndexedDB('leetCodeProblemNotes');
+            if (backupValue) {
+                const savedObject = JSON.parse(backupValue);
+                problemNotes = new Map(Object.entries(savedObject));
+                localStorage.setItem('leetCodeProblemNotes', backupValue);
+                console.log('Restored problem notes from backup');
+            }
+        } catch (error) {
+            console.error('Failed to restore from backup:', error);
+        }
     }
 }
 
 // Save problem notes to localStorage
-function saveProblemNotes() {
+async function saveProblemNotes() {
     const notesObject = Object.fromEntries(problemNotes);
-    localStorage.setItem('leetCodeProblemNotes', JSON.stringify(notesObject));
+    const data = JSON.stringify(notesObject);
+    localStorage.setItem('leetCodeProblemNotes', data);
+    // Also backup to IndexedDB
+    if (db) {
+        try {
+            await saveToIndexedDB('leetCodeProblemNotes', data);
+        } catch (error) {
+            console.error('Failed to backup problem notes:', error);
+        }
+    }
 }
 
 // Helper function to check storage quota and availability
@@ -88,14 +333,34 @@ function checkStorageQuota() {
 }
 
 // Save all problem data to localStorage with compression if needed
-function saveAllData() {
+async function saveAllData() {
     try {
         // First attempt - save without compression
-        localStorage.setItem('leetCodeProblems', JSON.stringify(allProblems));
-        localStorage.setItem('leetCodeCompanies', JSON.stringify([...companies]));
-        localStorage.setItem('leetCodeTopics', JSON.stringify([...topics]));
-        localStorage.setItem('leetCodeTimePeriods', JSON.stringify([...timePeriods]));
-        localStorage.setItem('leetCodeLastSaved', new Date().toISOString());
+        const problemsData = JSON.stringify(allProblems);
+        const companiesData = JSON.stringify([...companies]);
+        const topicsData = JSON.stringify([...topics]);
+        const timePeriodsData = JSON.stringify([...timePeriods]);
+        const lastSavedData = new Date().toISOString();
+        
+        localStorage.setItem('leetCodeProblems', problemsData);
+        localStorage.setItem('leetCodeCompanies', companiesData);
+        localStorage.setItem('leetCodeTopics', topicsData);
+        localStorage.setItem('leetCodeTimePeriods', timePeriodsData);
+        localStorage.setItem('leetCodeLastSaved', lastSavedData);
+        
+        // Backup to IndexedDB
+        if (db) {
+            try {
+                await saveToIndexedDB('leetCodeProblems', problemsData);
+                await saveToIndexedDB('leetCodeCompanies', companiesData);
+                await saveToIndexedDB('leetCodeTopics', topicsData);
+                await saveToIndexedDB('leetCodeTimePeriods', timePeriodsData);
+                await saveToIndexedDB('leetCodeLastSaved', lastSavedData);
+                console.log('Data backed up to IndexedDB');
+            } catch (error) {
+                console.error('Failed to backup to IndexedDB:', error);
+            }
+        }
         
         console.log(`Saved ${allProblems.length} problems to localStorage`);
         return true;
@@ -113,12 +378,32 @@ function saveAllData() {
                 });
                 
                 const reducedProblems = sortedProblems.slice(0, 500);
-                localStorage.setItem('leetCodeProblems', JSON.stringify(reducedProblems));
-                localStorage.setItem('leetCodeCompanies', JSON.stringify([...companies]));
-                localStorage.setItem('leetCodeTopics', JSON.stringify([...topics]));
-                localStorage.setItem('leetCodeTimePeriods', JSON.stringify([...timePeriods]));
-                localStorage.setItem('leetCodeLastSaved', new Date().toISOString());
+                const reducedProblemsData = JSON.stringify(reducedProblems);
+                const companiesData = JSON.stringify([...companies]);
+                const topicsData = JSON.stringify([...topics]);
+                const timePeriodsData = JSON.stringify([...timePeriods]);
+                const lastSavedData = new Date().toISOString();
+                
+                localStorage.setItem('leetCodeProblems', reducedProblemsData);
+                localStorage.setItem('leetCodeCompanies', companiesData);
+                localStorage.setItem('leetCodeTopics', topicsData);
+                localStorage.setItem('leetCodeTimePeriods', timePeriodsData);
+                localStorage.setItem('leetCodeLastSaved', lastSavedData);
                 localStorage.setItem('leetCodeDataTruncated', 'true');
+                
+                // Backup to IndexedDB
+                if (db) {
+                    try {
+                        await saveToIndexedDB('leetCodeProblems', reducedProblemsData);
+                        await saveToIndexedDB('leetCodeCompanies', companiesData);
+                        await saveToIndexedDB('leetCodeTopics', topicsData);
+                        await saveToIndexedDB('leetCodeTimePeriods', timePeriodsData);
+                        await saveToIndexedDB('leetCodeLastSaved', lastSavedData);
+                        await saveToIndexedDB('leetCodeDataTruncated', 'true');
+                    } catch (error) {
+                        console.error('Failed to backup truncated data:', error);
+                    }
+                }
                 
                 console.warn(`Saved ${reducedProblems.length} out of ${allProblems.length} problems (data truncated)`);
                 return true;
@@ -134,14 +419,42 @@ function saveAllData() {
 }
 
 // Load all problem data from localStorage
-function loadAllData() {
+async function loadAllData() {
     try {
-        const savedProblems = localStorage.getItem('leetCodeProblems');
-        const savedCompanies = localStorage.getItem('leetCodeCompanies');
-        const savedTopics = localStorage.getItem('leetCodeTopics');
-        const savedTimePeriods = localStorage.getItem('leetCodeTimePeriods');
-        const lastSaved = localStorage.getItem('leetCodeLastSaved');
-        const dataTruncated = localStorage.getItem('leetCodeDataTruncated') === 'true';
+        let savedProblems = localStorage.getItem('leetCodeProblems');
+        let savedCompanies = localStorage.getItem('leetCodeCompanies');
+        let savedTopics = localStorage.getItem('leetCodeTopics');
+        let savedTimePeriods = localStorage.getItem('leetCodeTimePeriods');
+        let lastSaved = localStorage.getItem('leetCodeLastSaved');
+        let dataTruncated = localStorage.getItem('leetCodeDataTruncated') === 'true';
+        
+        // If localStorage is empty, try to restore from IndexedDB
+        if (!savedProblems && db) {
+            console.log('localStorage is empty, attempting to restore from IndexedDB backup...');
+            try {
+                savedProblems = await loadFromIndexedDB('leetCodeProblems');
+                savedCompanies = await loadFromIndexedDB('leetCodeCompanies');
+                savedTopics = await loadFromIndexedDB('leetCodeTopics');
+                savedTimePeriods = await loadFromIndexedDB('leetCodeTimePeriods');
+                lastSaved = await loadFromIndexedDB('leetCodeLastSaved');
+                const dataTruncatedBackup = await loadFromIndexedDB('leetCodeDataTruncated');
+                dataTruncated = dataTruncatedBackup === 'true';
+                
+                // Restore to localStorage
+                if (savedProblems) localStorage.setItem('leetCodeProblems', savedProblems);
+                if (savedCompanies) localStorage.setItem('leetCodeCompanies', savedCompanies);
+                if (savedTopics) localStorage.setItem('leetCodeTopics', savedTopics);
+                if (savedTimePeriods) localStorage.setItem('leetCodeTimePeriods', savedTimePeriods);
+                if (lastSaved) localStorage.setItem('leetCodeLastSaved', lastSaved);
+                if (dataTruncatedBackup) localStorage.setItem('leetCodeDataTruncated', dataTruncatedBackup);
+                
+                if (savedProblems) {
+                    console.log('Successfully restored data from IndexedDB backup');
+                }
+            } catch (error) {
+                console.error('Failed to restore from IndexedDB backup:', error);
+            }
+        }
         
         if (savedProblems && savedCompanies && savedTopics && savedTimePeriods) {
             // Restore problems array
@@ -835,6 +1148,7 @@ function filterProblems() {
         // Sort the filtered problems
         const sortedProblems = sortProblems(filteredProblems, currentSortColumn, currentSortDirection);
         
+        // Display problems with fresh notes data
         displayProblems(sortedProblems);
         updateProblemCount(sortedProblems);
         updateSortHeader();
@@ -979,6 +1293,7 @@ function displayProblems(problems) {
         const notesContainer = document.createElement('div');
         notesContainer.className = 'notes-container';
         
+        // Get current note from the problemNotes Map
         const currentNote = problemNotes.get(problem.Link) || '';
         
         // Notes button
@@ -988,9 +1303,10 @@ function displayProblems(problems) {
             '<span class="notes-icon">📝</span> View Notes' : 
             '<span class="notes-icon">📝</span> Add Notes';
         
-        // Click to open notes modal
+        // Click to open notes modal - get fresh note data when clicked
         notesButton.addEventListener('click', () => {
-            openNotesModal(problem, currentNote);
+            const freshNote = problemNotes.get(problem.Link) || '';
+            openNotesModal(problem, freshNote);
         });
         
         notesContainer.appendChild(notesButton);
@@ -1155,6 +1471,11 @@ function updateStorageStatus() {
             statusText += ` · Last saved: ${lastSavedText}`;
         }
         
+        // Add backup indicator
+        if (db) {
+            statusText += ' · 🔒 Backup enabled';
+        }
+        
         if (dataTruncated) {
             statusText += ' · Note: Data was truncated due to storage limits';
             statusElement.className = 'status-warning';
@@ -1186,11 +1507,30 @@ function updateStorageStatus() {
 }
 
 // Clear all saved data
-function clearSavedData() {
-    // Only clear leetcode related items
+async function clearSavedData() {
+    // Only clear leetcode related items from localStorage
     for (const key in localStorage) {
         if (localStorage.hasOwnProperty(key) && key.startsWith('leetCode')) {
             localStorage.removeItem(key);
+        }
+    }
+    
+    // Also clear from IndexedDB backup
+    if (db) {
+        try {
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const clearRequest = store.clear();
+            
+            await new Promise((resolve, reject) => {
+                clearRequest.onsuccess = () => {
+                    console.log('IndexedDB backup cleared');
+                    resolve();
+                };
+                clearRequest.onerror = () => reject(clearRequest.error);
+            });
+        } catch (error) {
+            console.error('Failed to clear IndexedDB backup:', error);
         }
     }
     
@@ -1260,24 +1600,43 @@ function closeUploadPanelOnClickOutside(event) {
 }
 
 // Event listeners
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize IndexedDB for backup storage
+    try {
+        await initIndexedDB();
+        console.log('Backup storage system initialized');
+        
+        // Check if localStorage is empty and try to restore from backup
+        const hasLocalStorage = localStorage.getItem('leetCodeProblems') !== null;
+        if (!hasLocalStorage) {
+            await syncFromBackup();
+        }
+    } catch (error) {
+        console.error('Failed to initialize backup storage:', error);
+    }
+    
     // Load completed problems
-    loadCompletedProblems();
+    await loadCompletedProblems();
     
     // Load revision problems
-    loadRevisionProblems();
+    await loadRevisionProblems();
     
     // Load problem notes
-    loadProblemNotes();
+    await loadProblemNotes();
     
     // Update storage status display
     updateStorageStatus();
     
     // Try to load saved data from localStorage
-    if (loadAllData()) {
+    if (await loadAllData()) {
         // If data loaded successfully, update UI
         updateFilterOptions();
-        filterProblems();
+        
+        // Make sure to refresh the display after all data (including notes) is loaded
+        setTimeout(() => {
+            filterProblems();
+        }, 100);
+        
         updateUploadStatus('Loaded saved data from previous session');
         
         // Update count of loaded companies in status
@@ -1298,10 +1657,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set up Clear Data button
     const clearDataBtn = document.getElementById('clear-data');
     if (clearDataBtn) {
-        clearDataBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear all saved data? This cannot be undone.')) {
-                if (clearSavedData()) {
-                    updateUploadStatus('All saved data has been cleared');
+        clearDataBtn.addEventListener('click', async () => {
+            if (confirm('Are you sure you want to clear all saved data including backups? This cannot be undone.')) {
+                if (await clearSavedData()) {
+                    updateUploadStatus('All saved data and backups have been cleared');
                 }
             }
         });
@@ -1584,7 +1943,8 @@ function updateNotesButton(problem, noteText) {
     const rows = tableBody.querySelectorAll('tr');
     
     rows.forEach(row => {
-        const linkCell = row.querySelector('td:nth-child(6) a'); // Title column with link
+        // Look for the problem link in the title column (which should be the 6th column)
+        const linkCell = row.querySelector('a.problem-link');
         if (linkCell && linkCell.href === problem.Link) {
             const button = row.querySelector('.notes-button');
             if (button) {

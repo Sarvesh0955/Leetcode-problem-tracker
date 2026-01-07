@@ -54,19 +54,37 @@ Each CSV file should contain columns like:
 - Link (to LeetCode problem)
 - Topics (comma-separated)
 
-## Data Persistence
+## Data Persistence & Backup 🔒
 
-The application automatically stores your data in your browser's local storage, enabling:
+The application uses a **dual-storage system** to protect your data:
 
-- **Complete Data Persistence**: All problem data is saved automatically when you upload files.
-- **Progress Tracking**: Your completed problems and revision marks are preserved.
-- **Quick Loading**: Data loads automatically when you revisit the site, no need to re-upload files.
-- **Storage Management**: View your current storage usage and clear saved data if needed.
+### Primary Storage (localStorage)
+- Fast and immediate access
+- Stores all your problems, completed status, revision markers, and notes
+- Limited to ~5-10 MB depending on browser
+
+### Automatic Backup (IndexedDB)
+- **NEW**: All data is automatically backed up to IndexedDB
+- More persistent and resilient to data loss
+- Automatically restores your data if localStorage is cleared
+- Larger storage capacity for extensive problem sets
+
+### What This Means For You
+- **Complete Data Persistence**: All problem data is saved automatically when you upload files
+- **Progress Tracking**: Your completed problems and revision marks are preserved
+- **Automatic Recovery**: If browser storage is cleared, your data is automatically restored from backup
+- **Quick Loading**: Data loads automatically when you revisit the site
+- **Storage Management**: View your current storage usage with backup status indicator (🔒 Backup enabled)
+
+Look for the **🔒 Backup enabled** indicator in the storage status to confirm your data is being backed up.
+
+For more details about the backup system, see [BACKUP_INFO.md](BACKUP_INFO.md).
 
 ### Storage Limitations
 
 Browser local storage is limited (typically 5-10MB). If you upload a very large dataset:
 
 - The application will automatically prioritize higher frequency problems if space is limited
-- You can always clear the saved data and start fresh
-- Your completed problem markers will be saved separately from the main dataset
+- Both localStorage and IndexedDB backup will be updated
+- You can clear saved data (including backups) if needed
+- Your completed problem markers are saved separately and always preserved
