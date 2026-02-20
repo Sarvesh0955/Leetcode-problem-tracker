@@ -78,8 +78,6 @@ The application uses a **dual-storage system** to protect your data:
 
 Look for the **🔒 Backup enabled** indicator in the storage status to confirm your data is being backed up.
 
-For more details about the backup system, see [BACKUP_INFO.md](BACKUP_INFO.md).
-
 ### Storage Limitations
 
 Browser local storage is limited (typically 5-10MB). If you upload a very large dataset:

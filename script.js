@@ -1797,6 +1797,50 @@ document.addEventListener('DOMContentLoaded', async () => {
             highlightRandomProblem(randomProblem);
         }, 100);
     });
+    
+    // Notes Modal Event Listeners
+    const modal = document.getElementById('notes-modal');
+    const closeBtn = document.querySelector('.modal-close');
+    const saveBtn = document.getElementById('save-notes');
+    const cancelBtn = document.getElementById('cancel-notes');
+    const clearBtn = document.getElementById('clear-notes');
+    const textarea = document.getElementById('notes-textarea');
+    
+    // Close modal events
+    closeBtn.addEventListener('click', closeNotesModal);
+    cancelBtn.addEventListener('click', closeNotesModal);
+    
+    // Save notes
+    saveBtn.addEventListener('click', saveNotesFromModal);
+    
+    // Clear notes
+    clearBtn.addEventListener('click', clearNotesFromModal);
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeNotesModal();
+        }
+    });
+    
+    // Keyboard shortcuts
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            saveNotesFromModal();
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeNotesModal();
+        }
+    });
+    
+    // Close modal with Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'block') {
+            closeNotesModal();
+        }
+    });
 });
 
 // Function to highlight and scroll to a specific problem in the table
@@ -1965,49 +2009,3 @@ function clearNotesFromModal() {
     textarea.value = '';
     textarea.focus();
 }
-
-// Event listeners for modal
-document.addEventListener('DOMContentLoaded', function() {
-    const modal = document.getElementById('notes-modal');
-    const closeBtn = document.querySelector('.modal-close');
-    const saveBtn = document.getElementById('save-notes');
-    const cancelBtn = document.getElementById('cancel-notes');
-    const clearBtn = document.getElementById('clear-notes');
-    const textarea = document.getElementById('notes-textarea');
-    
-    // Close modal events
-    closeBtn.addEventListener('click', closeNotesModal);
-    cancelBtn.addEventListener('click', closeNotesModal);
-    
-    // Save notes
-    saveBtn.addEventListener('click', saveNotesFromModal);
-    
-    // Clear notes
-    clearBtn.addEventListener('click', clearNotesFromModal);
-    
-    // Close modal when clicking outside
-    window.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            closeNotesModal();
-        }
-    });
-    
-    // Keyboard shortcuts
-    textarea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && e.ctrlKey) {
-            e.preventDefault();
-            saveNotesFromModal();
-        }
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            closeNotesModal();
-        }
-    });
-    
-    // Close modal with Escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.style.display === 'block') {
-            closeNotesModal();
-        }
-    });
-});
