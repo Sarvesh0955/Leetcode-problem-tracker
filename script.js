@@ -220,6 +220,8 @@ async function saveCompletedProblems() {
             console.error('Failed to backup completed problems:', error);
         }
     }
+    // Trigger auto-backup
+    handleAutoBackup();
 }
 
 // Load revision problems from localStorage if available
@@ -256,6 +258,8 @@ async function saveRevisionProblems() {
             console.error('Failed to backup revision problems:', error);
         }
     }
+    // Trigger auto-backup
+    handleAutoBackup();
 }
 
 // Load problem notes from localStorage if available
@@ -293,7 +297,546 @@ async function saveProblemNotes() {
             console.error('Failed to backup problem notes:', error);
         }
     }
+    // Trigger auto-backup
+    handleAutoBackup();
 }
+
+// ============================================================================
+// BACKUP AND RESTORE SYSTEM
+// ============================================================================
+// Advanced backup and restore functionality for data portability and safety
+// Features:
+// - Export all app data as timestamped JSON files
+// - Import and validate backup files with confirmation
+// - Automatic backup system triggered by data changes
+// - Cross-device data synchronization capability
+// ============================================================================
+
+// Global variables for backup system
+let changeCounter = 0;
+let isAutoBackupEnabled = true;
+let autoBackupInterval = 5; // backup every N changes
+
+/**
+ * Collects all LeetCode tracker data from localStorage
+ * @returns {Object} Complete data object with all app state
+ */
+const getAllAppData = () => {
+    const appData = {
+        metadata: {
+            appName: 'LeetCode Problem Tracker',
+            version: '1.0.0',
+            exportDate: new Date().toISOString(),
+            dataVersion: 1
+        },
+        problemsData: {
+            allProblems: localStorage.getItem('leetCodeProblems'),
+            companies: localStorage.getItem('leetCodeCompanies'),
+            topics: localStorage.getItem('leetCodeTopics'),
+            timePeriods: localStorage.getItem('leetCodeTimePeriods'),
+            lastSaved: localStorage.getItem('leetCodeLastSaved'),
+            dataTruncated: localStorage.getItem('leetCodeDataTruncated')
+        },
+        userProgress: {
+            completedProblems: localStorage.getItem('completedLeetCodeProblems'),
+            revisionProblems: localStorage.getItem('revisionLeetCodeProblems'),
+            problemNotes: localStorage.getItem('leetCodeProblemNotes')
+        },
+        statistics: {
+            totalProblems: allProblems.length,
+            totalCompleted: completedProblems.size,
+            totalForRevision: revisionProblems.size,
+            totalNotes: problemNotes.size,
+            exportTimestamp: Date.now()
+        }
+    };
+    
+    // Remove null values to keep JSON clean
+    Object.keys(appData.problemsData).forEach(key => {
+        if (appData.problemsData[key] === null) {
+            delete appData.problemsData[key];
+        }
+    });
+    
+    Object.keys(appData.userProgress).forEach(key => {
+        if (appData.userProgress[key] === null) {
+            delete appData.userProgress[key];
+        }
+    });
+    
+    return appData;
+};
+
+/**
+ * Generates a timestamped filename for backup files
+ * @returns {string} Formatted filename with timestamp
+ */
+const generateBackupFilename = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    return `leetcode-tracker-backup-${year}${month}${day}-${hours}${minutes}${seconds}.json`;
+};
+
+/**
+ * Creates and downloads a backup file using Blob API
+ * @param {Object} data - The data to backup
+ * @param {string} filename - The filename for the backup
+ */
+const downloadBackupFile = (data, filename) => {
+    try {
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const downloadLink = document.createElement('a');
+        downloadLink.href = url;
+        downloadLink.download = filename;
+        downloadLink.style.display = 'none';
+        
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        // Clean up the URL object
+        URL.revokeObjectURL(url);
+        
+        return true;
+    } catch (error) {
+        console.error('Failed to create backup file:', error);
+        throw new Error(`Backup file creation failed: ${error.message}`);
+    }
+};
+
+/**
+ * Validates the structure and content of an imported backup file
+ * @param {Object} backupData - The parsed backup data
+ * @returns {Object} Validation result with success flag and details
+ */
+const validateBackupData = (backupData) => {
+    const validation = {
+        isValid: true,
+        warnings: [],
+        errors: [],
+        statistics: {}
+    };
+    
+    // Check if it's a valid backup file structure
+    if (!backupData || typeof backupData !== 'object') {
+        validation.isValid = false;
+        validation.errors.push('Invalid backup file format');
+        return validation;
+    }
+    
+    // Check metadata
+    if (!backupData.metadata || !backupData.metadata.appName) {
+        validation.warnings.push('Backup metadata missing - file may not be from LeetCode Tracker');
+    }
+    
+    // Check essential data sections
+    if (!backupData.problemsData && !backupData.userProgress) {
+        validation.isValid = false;
+        validation.errors.push('No valid data sections found in backup');
+        return validation;
+    }
+    
+    // Calculate what will be restored
+    let problemCount = 0;
+    let completedCount = 0;
+    let noteCount = 0;
+    let revisionCount = 0;
+    
+    try {
+        if (backupData.problemsData?.allProblems) {
+            const problems = JSON.parse(backupData.problemsData.allProblems);
+            problemCount = Array.isArray(problems) ? problems.length : 0;
+        }
+        
+        if (backupData.userProgress?.completedProblems) {
+            const completed = JSON.parse(backupData.userProgress.completedProblems);
+            completedCount = Array.isArray(completed) ? completed.length : 0;
+        }
+        
+        if (backupData.userProgress?.revisionProblems) {
+            const revision = JSON.parse(backupData.userProgress.revisionProblems);
+            revisionCount = Array.isArray(revision) ? revision.length : 0;
+        }
+        
+        if (backupData.userProgress?.problemNotes) {
+            const notes = JSON.parse(backupData.userProgress.problemNotes);
+            noteCount = Object.keys(notes || {}).length;
+        }
+    } catch (parseError) {
+        validation.isValid = false;
+        validation.errors.push(`Data parsing error: ${parseError.message}`);
+        return validation;
+    }
+    
+    validation.statistics = {
+        problemCount,
+        completedCount,
+        revisionCount,
+        noteCount
+    };
+    
+    // Add informational messages
+    if (problemCount === 0) {
+        validation.warnings.push('No problem data found in backup');
+    }
+    
+    if (completedCount === 0 && revisionCount === 0 && noteCount === 0) {
+        validation.warnings.push('No progress data (completed problems, notes, etc.) found');
+    }
+    
+    return validation;
+};
+
+/**
+ * Restores data from a validated backup object
+ * @param {Object} backupData - The validated backup data
+ * @returns {Promise<boolean>} Success status
+ */
+const restoreFromBackupData = async (backupData) => {
+    try {
+        // Clear existing data first
+        await clearSavedData();
+        
+        // Restore problems data
+        if (backupData.problemsData) {
+            const { problemsData } = backupData;
+            
+            if (problemsData.allProblems) {
+                localStorage.setItem('leetCodeProblems', problemsData.allProblems);
+            }
+            if (problemsData.companies) {
+                localStorage.setItem('leetCodeCompanies', problemsData.companies);
+            }
+            if (problemsData.topics) {
+                localStorage.setItem('leetCodeTopics', problemsData.topics);
+            }
+            if (problemsData.timePeriods) {
+                localStorage.setItem('leetCodeTimePeriods', problemsData.timePeriods);
+            }
+            if (problemsData.lastSaved) {
+                localStorage.setItem('leetCodeLastSaved', problemsData.lastSaved);
+            }
+            if (problemsData.dataTruncated) {
+                localStorage.setItem('leetCodeDataTruncated', problemsData.dataTruncated);
+            }
+        }
+        
+        // Restore user progress
+        if (backupData.userProgress) {
+            const { userProgress } = backupData;
+            
+            if (userProgress.completedProblems) {
+                localStorage.setItem('completedLeetCodeProblems', userProgress.completedProblems);
+            }
+            if (userProgress.revisionProblems) {
+                localStorage.setItem('revisionLeetCodeProblems', userProgress.revisionProblems);
+            }
+            if (userProgress.problemNotes) {
+                localStorage.setItem('leetCodeProblemNotes', userProgress.problemNotes);
+            }
+        }
+        
+        // Also backup the restored data to IndexedDB
+        await backupToIndexedDB();
+        
+        return true;
+    } catch (error) {
+        console.error('Failed to restore backup data:', error);
+        throw new Error(`Restore failed: ${error.message}`);
+    }
+};
+
+/**
+ * Main export backup function
+ * Collects all data and triggers download
+ */
+const exportBackup = async () => {
+    try {
+        updateBackupStatus('Preparing backup...', 'info');
+        
+        // Collect all app data
+        const appData = getAllAppData();
+        
+        // Generate filename
+        const filename = generateBackupFilename();
+        
+        // Create and download backup file
+        downloadBackupFile(appData, filename);
+        
+        updateBackupStatus(`✅ Backup exported: ${filename}`, 'success');
+        
+        // Auto-clear status after 5 seconds
+        setTimeout(() => {
+            updateBackupStatus('', '');
+        }, 5000);
+        
+        return true;
+    } catch (error) {
+        updateBackupStatus(`❌ Export failed: ${error.message}`, 'error');
+        console.error('Backup export failed:', error);
+        return false;
+    }
+};
+
+/**
+ * Main import backup function
+ * Handles file selection, validation, and restoration
+ */
+const importBackup = async (file) => {
+    try {
+        updateBackupStatus('Reading backup file...', 'info');
+        
+        // Read file content
+        const fileContent = await readFileAsText(file);
+        
+        updateBackupStatus('Validating backup data...', 'info');
+        
+        // Parse JSON
+        let backupData;
+        try {
+            backupData = JSON.parse(fileContent);
+        } catch (parseError) {
+            throw new Error('Invalid JSON format in backup file');
+        }
+        
+        // Validate backup data
+        const validation = validateBackupData(backupData);
+        
+        if (!validation.isValid) {
+            throw new Error(`Invalid backup file: ${validation.errors.join(', ')}`);
+        }
+        
+        // Show confirmation dialog with backup statistics
+        const { statistics } = validation;
+        const confirmMessage = `
+Import Backup Confirmation:
+
+📊 This backup contains:
+• ${statistics.problemCount} problems
+• ${statistics.completedCount} completed problems  
+• ${statistics.revisionCount} problems marked for revision
+• ${statistics.noteCount} problem notes
+
+⚠️ WARNING: This will replace ALL current data!
+
+${validation.warnings.length > 0 ? '\n⚠️ Warnings:\n' + validation.warnings.map(w => `• ${w}`).join('\n') : ''}
+
+Do you want to continue?`;
+        
+        if (!confirm(confirmMessage)) {
+            updateBackupStatus('Import cancelled by user', 'info');
+            return false;
+        }
+        
+        updateBackupStatus('Restoring backup data...', 'info');
+        
+        // Restore the data
+        await restoreFromBackupData(backupData);
+        
+        updateBackupStatus('Reloading application...', 'info');
+        
+        // Reload the application state
+        await reloadApplicationData();
+        
+        updateBackupStatus(`✅ Backup restored successfully! ${statistics.problemCount} problems loaded.`, 'success');
+        
+        // Auto-clear status after 5 seconds
+        setTimeout(() => {
+            updateBackupStatus('', '');
+        }, 5000);
+        
+        return true;
+    } catch (error) {
+        updateBackupStatus(`❌ Import failed: ${error.message}`, 'error');
+        console.error('Backup import failed:', error);
+        return false;
+    }
+};
+
+/**
+ * Automatic backup function
+ * Triggers backup after specified number of changes
+ */
+const handleAutoBackup = () => {
+    if (!isAutoBackupEnabled) return;
+    
+    changeCounter++;
+    
+    if (changeCounter >= autoBackupInterval) {
+        performAutoBackup();
+        changeCounter = 0; // Reset counter
+    }
+};
+
+/**
+ * Performs automatic backup with minimal UI disruption
+ * Stores backup internally without triggering downloads
+ */
+const performAutoBackup = async () => {
+    try {
+        const appData = getAllAppData();
+        const backupId = `auto-backup-${Date.now()}`;
+        
+        // Store backup in IndexedDB instead of downloading
+        await storeAutoBackup(backupId, appData);
+        
+        // Show brief success notification
+        updateBackupStatus('🔄 Auto-backup saved', 'success');
+        setTimeout(() => {
+            updateBackupStatus('', '');
+        }, 2000);
+        
+        console.log('Auto-backup stored internally:', backupId);
+    } catch (error) {
+        console.error('Auto-backup failed:', error);
+        // Don't show error to user for auto-backup failures to avoid disruption
+    }
+};
+
+/**
+ * Stores automatic backup in IndexedDB
+ * @param {string} backupId - Unique backup identifier
+ * @param {Object} backupData - The backup data to store
+ */
+const storeAutoBackup = async (backupId, backupData) => {
+    if (!db) {
+        console.warn('IndexedDB not available for auto-backup storage');
+        return;
+    }
+
+    try {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        
+        const autoBackupData = {
+            key: backupId,
+            value: JSON.stringify(backupData),
+            timestamp: new Date().toISOString(),
+            isAutoBackup: true
+        };
+        
+        await new Promise((resolve, reject) => {
+            const request = store.put(autoBackupData);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+        
+        // Clean up old auto-backups (keep only last 10)
+        await cleanupOldAutoBackups();
+        
+    } catch (error) {
+        console.error('Failed to store auto-backup:', error);
+        throw error;
+    }
+};
+
+/**
+ * Removes old auto-backups, keeping only the most recent 10
+ */
+const cleanupOldAutoBackups = async () => {
+    if (!db) return;
+    
+    try {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        
+        // Get all auto-backups
+        const autoBackups = await new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result.filter(item => item.isAutoBackup));
+            request.onerror = () => reject(request.error);
+        });
+        
+        // Sort by timestamp (newest first)
+        autoBackups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        // Remove old backups (keep only 10 most recent)
+        if (autoBackups.length > 10) {
+            const toDelete = autoBackups.slice(10);
+            
+            for (const backup of toDelete) {
+                await new Promise((resolve, reject) => {
+                    const deleteRequest = store.delete(backup.key);
+                    deleteRequest.onsuccess = () => resolve();
+                    deleteRequest.onerror = () => reject(deleteRequest.error);
+                });
+            }
+            
+            console.log(`Cleaned up ${toDelete.length} old auto-backups`);
+        }
+        
+    } catch (error) {
+        console.error('Failed to cleanup old auto-backups:', error);
+    }
+};
+
+/**
+ * Updates backup status display
+ * @param {string} message - Status message
+ * @param {string} type - Status type (success, error, info)
+ */
+const updateBackupStatus = (message, type) => {
+    const statusElement = document.getElementById('backup-status');
+    if (!statusElement) return;
+    
+    statusElement.textContent = message;
+    statusElement.className = type;
+};
+
+/**
+ * Reads file as text using FileReader
+ * @param {File} file - File to read
+ * @returns {Promise<string>} File content as text
+ */
+const readFileAsText = (file) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => resolve(event.target.result);
+        reader.onerror = (error) => reject(new Error(`Failed to read file: ${error.message}`));
+        reader.readAsText(file);
+    });
+};
+
+/**
+ * Reloads application data after import
+ * Refreshes in-memory data structures and UI
+ */
+const reloadApplicationData = async () => {
+    try {
+        // Reload data from localStorage
+        await loadAllData();
+        await loadCompletedProblems();
+        await loadRevisionProblems();
+        await loadProblemNotes();
+        
+        // Update UI components
+        updateFilterOptions();
+        updateStorageStatus();
+        
+        // Apply current filters and refresh display
+        setTimeout(() => {
+            filterProblems();
+        }, 100);
+        
+        return true;
+    } catch (error) {
+        console.error('Failed to reload application data:', error);
+        throw error;
+    }
+};
+
+// ============================================================================
+// END BACKUP AND RESTORE SYSTEM
+// ============================================================================
 
 // Helper function to check storage quota and availability
 function checkStorageQuota() {
@@ -363,6 +906,10 @@ async function saveAllData() {
         }
         
         console.log(`Saved ${allProblems.length} problems to localStorage`);
+        
+        // Trigger auto-backup for new problem data
+        handleAutoBackup();
+        
         return true;
     } catch (error) {
         // If storage quota exceeded, try with fewer problems
@@ -978,7 +1525,7 @@ function setLoading(isLoading) {
 }
 
 // Sort problems based on column and direction
-function sortProblems(problems, sortColumn, sortDirection) {
+function sortProblems(problems, sortColumn, sortDirection, companyFilter = null) {
     return [...problems].sort((a, b) => {
         let aValue, bValue;
         
@@ -1002,8 +1549,14 @@ function sortProblems(problems, sortColumn, sortDirection) {
                 bValue = b.Title || '';
                 break;
             case 'frequency':
-                aValue = parseFloat(a.Frequency) || 0;
-                bValue = parseFloat(b.Frequency) || 0;
+                // Use company-specific frequency if a company filter is applied
+                if (companyFilter) {
+                    aValue = (a.FrequencyByCompany && a.FrequencyByCompany[companyFilter]) ? parseFloat(a.FrequencyByCompany[companyFilter]) : parseFloat(a.Frequency) || 0;
+                    bValue = (b.FrequencyByCompany && b.FrequencyByCompany[companyFilter]) ? parseFloat(b.FrequencyByCompany[companyFilter]) : parseFloat(b.Frequency) || 0;
+                } else {
+                    aValue = parseFloat(a.Frequency) || 0;
+                    bValue = parseFloat(b.Frequency) || 0;
+                }
                 break;
             case 'acceptance':
                 aValue = parseFloat(a["Acceptance Rate"] || a.Acceptance_Rate) || 0;
@@ -1144,9 +1697,10 @@ function filterProblems() {
     // Use setTimeout to allow UI to update before heavy processing
     setTimeout(() => {
         const filteredProblems = getFilteredProblems();
+        const companyFilter = document.getElementById('company-filter').value;
         
         // Sort the filtered problems
-        const sortedProblems = sortProblems(filteredProblems, currentSortColumn, currentSortDirection);
+        const sortedProblems = sortProblems(filteredProblems, currentSortColumn, currentSortDirection, companyFilter);
         
         // Display problems with fresh notes data
         displayProblems(sortedProblems);
@@ -1841,6 +2395,103 @@ document.addEventListener('DOMContentLoaded', async () => {
             closeNotesModal();
         }
     });
+
+    // ============================================================================
+    // BACKUP SYSTEM EVENT LISTENERS
+    // ============================================================================
+    
+    // Export backup button
+    const exportBackupBtn = document.getElementById('export-backup');
+    if (exportBackupBtn) {
+        exportBackupBtn.addEventListener('click', async () => {
+            exportBackupBtn.disabled = true;
+            exportBackupBtn.textContent = '📥 Exporting...';
+            
+            try {
+                await exportBackup();
+            } catch (error) {
+                console.error('Export backup failed:', error);
+            } finally {
+                exportBackupBtn.disabled = false;
+                exportBackupBtn.textContent = '📥 Export Backup';
+            }
+        });
+    }
+    
+    // Import backup file input
+    const importBackupInput = document.getElementById('import-backup');
+    if (importBackupInput) {
+        importBackupInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Disable the label temporarily
+            const label = document.querySelector('label[for="import-backup"]');
+            const originalText = label.textContent;
+            label.textContent = '📤 Importing...';
+            
+            try {
+                await importBackup(file);
+            } catch (error) {
+                console.error('Import backup failed:', error);
+            } finally {
+                // Reset the file input and label
+                event.target.value = '';
+                label.textContent = originalText;
+            }
+        });
+    }
+    
+    // Auto-backup toggle
+    const autoBackupToggle = document.getElementById('auto-backup-toggle');
+    if (autoBackupToggle) {
+        // Load saved preference
+        const savedAutoBackupPreference = localStorage.getItem('autoBackupEnabled');
+        if (savedAutoBackupPreference !== null) {
+            isAutoBackupEnabled = savedAutoBackupPreference === 'true';
+            autoBackupToggle.checked = isAutoBackupEnabled;
+        }
+        
+        autoBackupToggle.addEventListener('change', () => {
+            isAutoBackupEnabled = autoBackupToggle.checked;
+            localStorage.setItem('autoBackupEnabled', isAutoBackupEnabled.toString());
+            
+            if (isAutoBackupEnabled) {
+        updateBackupStatus('✅ Auto-backup enabled (saves internally)', 'success');
+            } else {
+                updateBackupStatus('⏸️ Auto-backup disabled', 'info');
+            }
+            
+            setTimeout(() => {
+                updateBackupStatus('', '');
+            }, 2000);
+        });
+    }
+    
+    // Auto-backup interval input
+    const autoBackupIntervalInput = document.getElementById('auto-backup-interval');
+    if (autoBackupIntervalInput) {
+        // Load saved interval preference
+        const savedInterval = localStorage.getItem('autoBackupInterval');
+        if (savedInterval) {
+            autoBackupInterval = parseInt(savedInterval, 10);
+            autoBackupIntervalInput.value = autoBackupInterval;
+        }
+        
+        autoBackupIntervalInput.addEventListener('change', () => {
+            const newInterval = parseInt(autoBackupIntervalInput.value, 10);
+            if (newInterval >= 1 && newInterval <= 50) {
+                autoBackupInterval = newInterval;
+                localStorage.setItem('autoBackupInterval', autoBackupInterval.toString());
+                changeCounter = 0; // Reset counter when interval changes
+                
+                updateBackupStatus(`Auto-save interval updated to ${autoBackupInterval} changes`, 'info');
+                setTimeout(() => {
+                    updateBackupStatus('', '');
+                }, 2000);
+            }
+        });
+    }
 });
 
 // Function to highlight and scroll to a specific problem in the table

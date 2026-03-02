@@ -25,6 +25,25 @@
                             <button id="upload-btn">Load Data</button>
                         </div>
                         <div id="upload-status"></div>   
+                        <div class="backup-management">
+                            <h4>Backup & Restore</h4>
+                            <div class="backup-controls">
+                                <button id="export-backup" class="backup-button" title="Export all app data as JSON backup file">📥 Export Backup</button>
+                                <div class="import-backup-container">
+                                    <input type="file" id="import-backup" accept=".json" />
+                                    <label for="import-backup" class="backup-button" title="Import backup from JSON file">📤 Import Backup</label>
+                                </div>
+                                <div class="auto-backup-controls">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="auto-backup-toggle" checked>
+                                        <span class="checkmark"></span>
+                                        Auto-save backup every <input type="number" id="auto-backup-interval" min="1" max="50" value="5"> changes
+                                    </label>
+                                    <small class="auto-backup-note">Auto-backups are saved internally (no downloads)</small>
+                                </div>
+                            </div>
+                            <div id="backup-status"></div>
+                        </div>
                         <div class="storage-management">
                             <div id="storage-status"></div>
                             <button id="clear-data">Clear Saved Data</button>
