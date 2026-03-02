@@ -86,3 +86,7 @@ Browser local storage is limited (typically 5-10MB). If you upload a very large 
 - Both localStorage and IndexedDB backup will be updated
 - You can clear saved data (including backups) if needed
 - Your completed problem markers are saved separately and always preserved
+
+### Problems Repo
+
+https://github.com/liquidslr/leetcode-company-wise-problems
